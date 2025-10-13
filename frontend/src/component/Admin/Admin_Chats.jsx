@@ -987,23 +987,47 @@ export default function Admin_Chats() {
   // ================= GROUP CHAT HANDLERS =================
 
   const handleCreateGroup = async () => {
-    if (!groupName.trim() || selectedParticipants.length === 0) {
+    // For SJDEF Forum, we allow empty participants as we'll add all users
+    const isSJDEFForum = groupName.toLowerCase() === "sjdef forum";
+  
+    if (!isSJDEFForum && (!groupName.trim() || selectedParticipants.length === 0)) {
       setValidationModal({
         isOpen: true,
         type: 'warning',
         title: 'Missing Information',
-        message: "Please provide a group name and select at least one participant"
+        message: "Please provide a group name and select at least one participant, or create an 'SJDEF Forum' to include all users"
       });
       return;
     }
 
     try {
       const token = localStorage.getItem("token");
+      
+      // For SJDEF Forum, include all users
+      let participants = selectedParticipants;
+      if (isSJDEFForum) {
+        // Get all user IDs except current user
+        participants = users
+          .filter(user => user._id !== currentUserId)
+          .map(user => user._id);
+      
+        // If no users found, show a warning
+        if (participants.length === 0) {
+          setValidationModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'No Users Found',
+            message: "No other users found to add to the forum"
+          });
+          return;
+        }
+      }
+      
       const res = await axios.post(`${API_BASE}/group-chats`, {
         name: groupName,
         description: groupDescription,
         createdBy: currentUserId,
-        participants: selectedParticipants,
+        participants: participants,
       }, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -1023,7 +1047,7 @@ export default function Admin_Chats() {
         isOpen: true,
         type: 'error',
         title: 'Creation Failed',
-        message: err.response?.data?.error || "Error creating group"
+        message: err.response?.data?.error || "Error creating group. Please try again."
       });
     }
   };
@@ -1327,6 +1351,17 @@ export default function Admin_Chats() {
                       onClick={() => { setShowCreateGroup(true); setShowGroupMenu(false); }}
                     >
                       Create Group
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                      onClick={() => {
+                        // Quick create SJDEF Forum
+                        setGroupName("SJDEF Forum");
+                        setShowCreateGroup(true);
+                        setShowGroupMenu(false);
+                      }}
+                    >
+                      Create SJDEF Forum
                     </button>
                     <button
                       className="w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -1673,8 +1708,8 @@ export default function Admin_Chats() {
 
         {/* Create Group Modal */}
         {showCreateGroup && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-semibold mb-4">Create New Group</h2>
               <div className="space-y-4">
                 <input
@@ -1684,6 +1719,27 @@ export default function Admin_Chats() {
                   onChange={(e) => setGroupName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {/* Special button for SJDEF Forum */}
+                {groupName.toLowerCase() === "sjdef forum" && (
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>SJDEF Forum detected:</strong> This will create a forum with all users in the system.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Select all users when creating SJDEF Forum
+                        const allUserIds = users
+                          .filter(user => user._id !== currentUserId)
+                          .map(user => user._id);
+                        setSelectedParticipants(allUserIds);
+                      }}
+                      className="mt-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                    >
+                      Select All Users ({users.filter(user => user._id !== currentUserId).length})
+                    </button>
+                  </div>
+                )}
                 {/* Member search box */}
                 <input
                   type="text"
@@ -1694,7 +1750,7 @@ export default function Admin_Chats() {
                 />
                 {/* Selected members chips/list */}
                 {selectedParticipants.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2 max-h-32 overflow-y-auto">
                     {selectedParticipants.map(userId => {
                       const user = users.find(u => u._id === userId);
                       if (!user) return null;
@@ -1749,12 +1805,12 @@ export default function Admin_Chats() {
                     }
                   </div>
                 )}
-                
+        
                 <div className="flex gap-2">
                   <button
                     onClick={handleCreateGroup}
                     className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                    disabled={!groupName.trim() || selectedParticipants.length === 0}
+                    disabled={!groupName.trim() || (groupName.toLowerCase() !== "sjdef forum" && selectedParticipants.length === 0)}
                   >
                     Create Group
                   </button>
@@ -1772,8 +1828,8 @@ export default function Admin_Chats() {
 
         {/* Join Group Modal */}
         {showJoinGroup && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-semibold mb-4">Join Group</h2>
               <div className="space-y-4">
                 <input
@@ -1804,8 +1860,8 @@ export default function Admin_Chats() {
 
         {/* Replace the dropdown with a centered modal for group members */}
         {showMembersDropdown && selectedChat.isGroup && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-semibold mb-4">Group Members</h3>
               <ul className="mb-4 divide-y divide-gray-200">
                                         {selectedChat.participants.map((userId) => {
@@ -1829,7 +1885,7 @@ export default function Admin_Chats() {
         )}
 
         {showLeaveConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
               <h3 className="text-lg font-semibold mb-4">Confirm Leave Group</h3>
               <p className="mb-4">Are you sure you want to leave the group "{selectedChat.name}"?</p>
