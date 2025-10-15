@@ -6,6 +6,7 @@ import SibApiV3Sdk from 'sib-api-v3-sdk';
 import exceljs from 'exceljs';
 import { sendEmail } from '../utils/emailUtil.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import GroupChat from '../models/GroupChat.js';
 // import nodemailer from 'nodemailer'; // For real email sending
 // import exceljs from 'exceljs'; // For real Excel export
 
@@ -257,6 +258,46 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     } catch (emailErr) {
       console.error('Error sending acceptance email via Brevo:', emailErr);
       brevoResult = { success: false, message: 'Failed to send acceptance email' };
+    }
+
+    // Try to auto-join the global forum group (by ID if provided, else by name)
+    try {
+      let target = null;
+      const forumId = process.env.FORUM_GROUP_ID && String(process.env.FORUM_GROUP_ID).trim();
+      if (forumId) {
+        try {
+          target = await GroupChat.findById(forumId);
+        } catch (_) {
+          // ignore invalid id
+        }
+      }
+      if (!target) {
+        const groups = await GroupChat.find({ isActive: true });
+        target = groups.find(g => {
+          const name = (g.getDecryptedName && g.getDecryptedName()) || g.name;
+          const n = (typeof name === 'string' ? name : '').toLowerCase();
+          return n === 'sjdef forum' || n === 'all users' || n === 'all users forum';
+        }) || null;
+      }
+      if (target) {
+        try {
+          const name = (target.getDecryptedName && target.getDecryptedName()) || target.name || '';
+          const n = (typeof name === 'string' ? name : '').toLowerCase();
+          if (n.includes('forum') || n === 'all users' || n === 'all users forum' || n === 'sjdef forum') {
+            if (typeof target.maxParticipants !== 'number' || target.maxParticipants < 100000) {
+              target.maxParticipants = 100000;
+            }
+          }
+        } catch (_) {}
+        if (!target.isParticipant(String(user._id))) {
+          const ok = target.addParticipant(String(user._id));
+          if (ok) {
+            await target.save();
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Auto-join to global forum group failed (approval):', e?.message || e);
     }
     res.json({ 
       message: 'Registrant approved and user created.',

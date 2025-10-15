@@ -3,6 +3,7 @@
 
 import express from 'express';
 import GroupChat from '../models/GroupChat.js';
+import User from '../models/User.js';
 import GroupMessage from '../models/GroupMessage.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
@@ -298,6 +299,56 @@ router.delete('/:groupId', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Error deleting group chat:", err);
     res.status(500).json({ error: "Server error deleting group chat" });
+  }
+});
+
+// --- POST /:groupId/sync-members - Ensure all active users are in the group (admin only trigger) ---
+router.post('/:groupId/sync-members', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const requesterId = req.user?._id || req.body?.userId;
+
+    const group = await GroupChat.findById(groupId);
+    if (!group || !group.isActive) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Only allow group admins or app admins to run sync
+    const isGroupAdmin = group.isAdmin && requesterId ? group.isAdmin(String(requesterId)) : false;
+    const isAppAdmin = req.user && req.user.role === 'admin';
+    if (!isGroupAdmin && !isAppAdmin) {
+      return res.status(403).json({ error: 'Not authorized to sync this group' });
+    }
+
+    // Fetch all active, non-archived users
+    const users = await User.find({ isArchived: { $ne: true } }, { _id: 1 }).lean();
+    const toAdd = [];
+    const seen = new Set(group.getDecryptedParticipants());
+    for (const u of users) {
+      const id = String(u._id);
+      if (!seen.has(id)) toAdd.push(id);
+    }
+
+    // Grow capacity if needed
+    if (typeof group.maxParticipants !== 'number' || group.maxParticipants < seen.size + toAdd.length) {
+      group.maxParticipants = Math.max(seen.size + toAdd.length, 100000);
+    }
+
+    // Add in batches
+    if (toAdd.length > 0) {
+      const current = group.getDecryptedParticipants();
+      group.participants = Array.from(new Set([...current, ...toAdd]));
+      await group.save();
+    }
+
+    return res.json({
+      message: 'Sync complete',
+      added: toAdd.length,
+      totalParticipants: group.getDecryptedParticipants().length
+    });
+  } catch (err) {
+    console.error('Error syncing group members:', err);
+    return res.status(500).json({ error: 'Server error syncing members' });
   }
 });
 

@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
@@ -613,6 +613,27 @@ export default function Admin_Chats() {
   }, [selectedChatMessages]);
 
   // ================= HANDLERS =================
+  const handleSyncGroupMembers = async () => {
+    if (!selectedChat || !selectedChat.isGroup) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/sync-members`, {}, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      // Refetch the group to update participants locally
+      const res = await axios.get(`${API_BASE}/group-chats/${selectedChat._id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const updated = res.data;
+      setUserGroups(prev => prev.map(g => g._id === updated._id ? { ...g, ...updated, isGroup: true } : g));
+      if (selectedChat && selectedChat._id === updated._id) {
+        setSelectedChat(prev => ({ ...(prev || {}), ...updated, isGroup: true }));
+      }
+      setValidationModal({ isOpen: true, type: 'success', title: 'Refresh Complete', message: 'Forum members synced with all active users.' });
+    } catch (err) {
+      setValidationModal({ isOpen: true, type: 'error', title: 'Refresh Failed', message: err.response?.data?.error || 'Could not refresh forum members.' });
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
@@ -1557,6 +1578,13 @@ export default function Admin_Chats() {
                           className="bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors text-sm mr-2"
                         >
                           View Members
+                        </button>
+                        <button
+                          onClick={handleSyncGroupMembers}
+                          title="Refresh members from Users"
+                          className="bg-blue-200 text-blue-900 px-3 py-1 rounded-lg hover:bg-blue-300 transition-colors text-sm mr-2"
+                        >
+                          Refresh Members
                         </button>
                         <button
                           onClick={() => navigator.clipboard?.writeText(selectedChat._id)}

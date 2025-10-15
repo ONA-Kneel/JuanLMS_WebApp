@@ -14,6 +14,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import SchoolYear from '../models/SchoolYear.js';
+import GroupChat from '../models/GroupChat.js';
 import Term from '../models/Term.js';
 import StudentAssignment from '../models/StudentAssignment.js';
 import FacultyAssignment from '../models/FacultyAssignment.js';
@@ -1380,6 +1381,49 @@ userRoutes.post("/users", authenticateToken, async (req, res) => {
                 console.error('Error adding student to existing classes:', classError);
                 // Don't fail user creation if class assignment fails
             }
+        }
+
+        // Try to auto-join the global forum group (by ID if provided, else by name)
+        try {
+            let target = null;
+            const forumId = process.env.FORUM_GROUP_ID && String(process.env.FORUM_GROUP_ID).trim();
+            if (forumId) {
+                try {
+                    target = await GroupChat.findById(forumId);
+                } catch (_) {
+                    // ignore
+                }
+            }
+            if (!target) {
+                // Fallback: fetch active groups and match by name
+                const groups = await GroupChat.find({ isActive: true });
+                target = groups.find(g => {
+                    const name = (g.getDecryptedName && g.getDecryptedName()) || g.name;
+                    const n = (typeof name === 'string' ? name : '').toLowerCase();
+                    return n === 'sjdef forum' || n === 'all users' || n === 'all users forum';
+                }) || null;
+            }
+            if (target) {
+                // Ensure big capacity for the global forum
+                try {
+                    const name = (target.getDecryptedName && target.getDecryptedName()) || target.name || '';
+                    const n = (typeof name === 'string' ? name : '').toLowerCase();
+                    if (n.includes('forum') || n === 'all users' || n === 'all users forum' || n === 'sjdef forum') {
+                        if (typeof target.maxParticipants !== 'number' || target.maxParticipants < 100000) {
+                            target.maxParticipants = 100000;
+                        }
+                    }
+                } catch (_) {}
+
+                if (!target.isParticipant(String(user._id))) {
+                    const ok = target.addParticipant(String(user._id));
+                    if (ok) await target.save();
+                }
+            } else {
+                // No global group found; skip silently
+            }
+        } catch (e) {
+            console.warn('Auto-join to global forum group failed:', e?.message || e);
         }
 
         const db = database.getDb();
