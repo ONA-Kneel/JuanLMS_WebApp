@@ -617,9 +617,27 @@ export default function Admin_Chats() {
     if (!selectedChat || !selectedChat.isGroup) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/sync-members`, {}, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      
+      // For SJDEF Forum, fetch all users and add them as participants
+      if (selectedChat.name && selectedChat.name.toLowerCase() === "sjdef forum") {
+        // Get all user IDs except current user
+        const allUserIds = users
+          .filter(user => user._id !== currentUserId)
+          .map(user => user._id);
+        
+        // Update the group with all users
+        await axios.put(`${API_BASE}/group-chats/${selectedChat._id}`, {
+          participants: allUserIds
+        }, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+      } else {
+        // For other groups, use the existing sync method
+        await axios.post(`${API_BASE}/group-chats/${selectedChat._id}/sync-members`, {}, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+      }
+      
       // Refetch the group to update participants locally
       const res = await axios.get(`${API_BASE}/group-chats/${selectedChat._id}`, {
         headers: { "Authorization": `Bearer ${token}` }
@@ -629,9 +647,21 @@ export default function Admin_Chats() {
       if (selectedChat && selectedChat._id === updated._id) {
         setSelectedChat(prev => ({ ...(prev || {}), ...updated, isGroup: true }));
       }
-      setValidationModal({ isOpen: true, type: 'success', title: 'Refresh Complete', message: 'Forum members synced with all active users.' });
+      setValidationModal({ 
+        isOpen: true, 
+        type: 'success', 
+        title: 'Refresh Complete', 
+        message: selectedChat.name && selectedChat.name.toLowerCase() === "sjdef forum" 
+          ? 'All active users added to SJDEF Forum.' 
+          : 'Forum members synced with all active users.' 
+      });
     } catch (err) {
-      setValidationModal({ isOpen: true, type: 'error', title: 'Refresh Failed', message: err.response?.data?.error || 'Could not refresh forum members.' });
+      setValidationModal({ 
+        isOpen: true, 
+        type: 'error', 
+        title: 'Refresh Failed', 
+        message: err.response?.data?.error || 'Could not refresh forum members.' 
+      });
     }
   };
 
@@ -1579,13 +1609,15 @@ export default function Admin_Chats() {
                         >
                           View Members
                         </button>
-                        <button
-                          onClick={handleSyncGroupMembers}
-                          title="Refresh members from Users"
-                          className="bg-blue-200 text-blue-900 px-3 py-1 rounded-lg hover:bg-blue-300 transition-colors text-sm mr-2"
-                        >
-                          Refresh Members
-                        </button>
+                        {selectedChat.name && selectedChat.name.toLowerCase() === "sjdef forum" && (
+                          <button
+                            onClick={handleSyncGroupMembers}
+                            title="Refresh members from Users"
+                            className="bg-blue-200 text-blue-900 px-3 py-1 rounded-lg hover:bg-blue-300 transition-colors text-sm mr-2"
+                          >
+                            Refresh Members
+                          </button>
+                        )}
                         <button
                           onClick={() => navigator.clipboard?.writeText(selectedChat._id)}
                           title="Copy Group ID"

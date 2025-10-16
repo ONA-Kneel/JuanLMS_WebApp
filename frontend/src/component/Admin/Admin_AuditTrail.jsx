@@ -20,6 +20,11 @@ export default function Admin_AuditTrail() {
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Search terms for filtering
+  const [searchTerms, setSearchTerms] = useState({
+    userName: "",
+  });
 
   // Map backend action values to user-friendly labels
   const actionLabelMap = {
@@ -171,8 +176,6 @@ export default function Admin_AuditTrail() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
-
-
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -491,7 +494,7 @@ export default function Admin_AuditTrail() {
     }
   };
 
-  // Filter logs on the frontend based on selected action and role
+  // Filter logs on the frontend based on selected action, role, and search terms
   const filteredLogs = auditLogs.filter(log => {
     // Action filter
     if (selectedAction !== 'all') {
@@ -500,7 +503,11 @@ export default function Admin_AuditTrail() {
     }
     // Role filter
     if (selectedRole !== 'all' && log.userRole !== selectedRole) return false;
-    return true;
+    
+    // Search filters
+    const matchesUserName = log.userName?.toLowerCase().includes(searchTerms.userName.toLowerCase());
+    
+    return matchesUserName;
   });
 
   // Loading screen
@@ -542,66 +549,92 @@ export default function Admin_AuditTrail() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <select
-            value={selectedAction}
-            onChange={(e) => setSelectedAction(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {Object.entries(actionTypes).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-
-          <select
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {Object.entries(roleTypes).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          <div className="flex items-center gap-4">
-            {/* <button
-              onClick={fetchAuditLogs}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Refresh
-            </button> */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
+          <h4 className="text-xl md:text-2xl font-semibold">Audit Logs</h4>
+          <div className="flex gap-2">
             <button
               onClick={handleExport}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
             >
               Export to Excel
             </button>
             <button
               onClick={handleExportPDF}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
             >
               Export to PDF
             </button>
-            
           </div>
+        </div>
+        
+        {/* Results Count */}
+        <div className="mb-4 text-sm text-gray-600">
+          Showing {filteredLogs.length} of {auditLogs.length} logs | Page {currentPage} of {totalPages}
         </div>
 
         {/* Audit Logs Table */}
-        <div className="mt-8">
-          <h4 className="text-lg font-semibold mb-2">Audit Logs</h4>
-          <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
+        <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
+          <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg text-sm table-fixed overflow-visible">
             <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="p-3 border w-1/6">Timestamp</th>
-                <th className="p-3 border w-1/6">User</th>
-                <th className="p-3 border w-1/6">Role</th>
-                <th className="p-3 border w-1/6">Action</th>
-                <th className="p-3 border w-2/6">Details</th>
+              <tr className="bg-gray-50 text-left">
+                <th className="p-3 border-b border-[#00418B] w-1/6 font-semibold text-gray-700 whitespace-nowrap">Timestamp</th>
+                <th className="p-3 border-b border-[#00418B] w-1/6 font-semibold text-gray-700 whitespace-nowrap">User</th>
+                <th className="p-3 border-b border-[#00418B] w-1/6 font-semibold text-gray-700 whitespace-nowrap">Role</th>
+                <th className="p-3 border-b border-[#00418B] w-1/6 font-semibold text-gray-700 whitespace-nowrap">Action</th>
+                <th className="p-3 border-b border-[#00418B] w-2/6 font-semibold text-gray-700 whitespace-nowrap">Details</th>
+              </tr>
+              {/* Search row */}
+              <tr className="bg-white text-left">
+                <th className="p-2 border-b border-[#00418B]"></th>
+                <th className="p-2 border-b border-[#00418B]">
+                  <input 
+                    type="text" 
+                    placeholder="Search User" 
+                    className="w-full border border-[#00418B] rounded px-2 py-1 text-sm" 
+                    value={searchTerms.userName}
+                    onChange={(e) => setSearchTerms({...searchTerms, userName: e.target.value})}
+                  />
+                </th>
+                <th className="p-2 border-b border-[#00418B]">
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    className="w-full border border-[#00418B] rounded px-2 py-1 text-sm"
+                  >
+                    {Object.entries(roleTypes).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </th>
+                <th className="p-2 border-b border-[#00418B]">
+                  <select
+                    value={selectedAction}
+                    onChange={(e) => setSelectedAction(e.target.value)}
+                    className="w-full border border-[#00418B] rounded px-2 py-1 text-sm"
+                  >
+                    {Object.entries(actionTypes).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </th>
+                <th className="p-2 border-b border-[#00418B]">
+                  <button
+                    onClick={() => {
+                      setSelectedAction('all');
+                      setSelectedRole('all');
+                      setSearchTerms({ userName: "" });
+                    }}
+                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-2 py-1 rounded"
+                  >
+                    Clear All Filters
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="text-center p-4 text-gray-500">
+                  <td colSpan="5" className="text-center p-4 text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                     </div>
@@ -609,11 +642,11 @@ export default function Admin_AuditTrail() {
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="4" className="text-center p-4 text-red-500">
+                  <td colSpan="5" className="text-center p-4 text-red-500">
                     <div className="font-medium">Error</div>
                     <div className="text-sm mt-1">{error}</div>
                     <button
-                      onClick={fetchAuditLogs}
+                      onClick={fetchInitialData}
                       className="mt-2 text-blue-500 hover:text-blue-700 underline"
                     >
                       Try Again
@@ -627,41 +660,51 @@ export default function Admin_AuditTrail() {
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => (
-                  <tr key={log._id} className="hover:bg-gray-50">
-                    <td className="p-3 border text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">{log.userName}</td>
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">{log.userRole || 'Unknown'}</td>
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">{actionLabelMap[log.action] || log.action}</td>
-                    <td className="p-3 border text-gray-500">{log.details}</td>
+                filteredLogs.map((log, idx) => (
+                  <tr key={log._id} className={idx % 2 === 0 ? "bg-white hover:bg-gray-50 transition" : "bg-gray-50 hover:bg-gray-100 transition"}>
+                    <td className="p-3 border-b border-[#00418B] text-gray-500 whitespace-nowrap">{formatDate(log.timestamp)}</td>
+                    <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">{log.userName}</td>
+                    <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">
+                      <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
+                        ${log.userRole === 'student' ? 'bg-green-100 text-green-700 border border-green-300' :
+                          log.userRole === 'faculty' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+                          log.userRole === 'admin' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                          log.userRole === 'principal' ? 'bg-purple-100 text-purple-700 border border-purple-300' :
+                          log.userRole === 'vice president of education' ? 'bg-pink-100 text-pink-700 border border-pink-300' :
+                          'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                        {log.userRole === 'vice president of education' ? 'Vice President of Education' : log.userRole || 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">{actionLabelMap[log.action] || log.action}</td>
+                    <td className="p-3 border-b border-[#00418B] text-gray-500">{log.details}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-
-          {/* Pagination Controls */}
-          {!loading && !error && filteredLogs.length > 0 && totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-4">
-              <button
-                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <span className="text-sm">Page {currentPage} of {totalPages}</span>
-              <button
-                className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-4">
+            <button
+              className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 disabled:opacity-50"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+            <span className="text-sm">Page {currentPage} of {totalPages}</span>
+            <button
+              className="px-4 py-2 rounded bg-[#00418B] hover:bg-[#003166] text-white disabled:opacity-50"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
-} 
+}
