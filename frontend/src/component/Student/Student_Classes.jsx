@@ -173,25 +173,24 @@ export default function Student_Classes() {
               <div
                 key={cls.classID || cls._id}
                 className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
-                style={{ minHeight: '240px', borderRadius: '28px' }}
+                style={{ minHeight: '240px' }}
                 onClick={() => navigate(`/student_class/${cls.classID || cls._id}`)}
               >
                 {/* Image section */}
-                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
+                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px' }}>
                   {cls.image ? (
                     <img
                       src={getFileUrl(cls.image, API_BASE)}
                       alt="Class"
                       className="object-cover w-full h-full"
-                      style={{ maxHeight: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}
                     />
                   ) : (
                     <span className="text-white text-xl font-bold">image</span>
                   )}
                 </div>
                 {/* Info section */}
-                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderRadius: 0, borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px', marginTop: 0 }}>
-                  <div>
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4 flex-grow">
+                  <div className="flex flex-col justify-center min-h-[60px]">
                     <div className="text-lg font-bold text-white">{cls.className || cls.subjectName || 'Subject Name'}</div>
                     <div className="text-white text-base">{cls.sectionName || cls.section || cls.classCode || 'Section Name'}</div>
                   </div>

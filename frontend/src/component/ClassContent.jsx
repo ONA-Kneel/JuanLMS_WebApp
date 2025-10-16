@@ -49,6 +49,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
 
+  // Simple paginate util
+  const paginate = (items, page, perPage) => {
+    const total = Array.isArray(items) ? items.length : 0;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const current = Math.min(Math.max(1, page), totalPages);
+    const start = (current - 1) * perPage;
+    const end = start + perPage;
+    return { data: (items || []).slice(start, end), totalPages, current };
+  };
+
   // Grades state
   const [gradesData, setGradesData] = useState([]);
   const [gradesLoading, setGradesLoading] = useState(false);
@@ -79,6 +89,18 @@ export default function ClassContent({ selected, isFaculty = false }) {
   const [studentSearchTerm, setStudentSearchTerm] = useState(''); // Search term for filtering students
   const [enrolledStudentIds, setEnrolledStudentIds] = useState([]); // Track which students are enrolled in this class
   const [showNonEnrolledStudents, setShowNonEnrolledStudents] = useState(false); // Toggle to show/hide non-enrolled students
+  // Brand outline color (same as Admin_Accounts.jsx)
+  const BRAND_BORDER = 'border-2 border-[#00418B]';
+
+  // Pagination state
+  const ANNOUNCEMENTS_PER_PAGE = 5;
+  const CLASSWORK_PER_PAGE = 5;
+  const MATERIALS_PER_PAGE = 5;
+  const MEMBERS_PER_PAGE = 20; // 10 left, 10 right per page
+  const [announcementsPage, setAnnouncementsPage] = useState(1);
+  const [classworkPage, setClassworkPage] = useState(1);
+  const [materialsPage, setMaterialsPage] = useState(1);
+  const [membersPage, setMembersPage] = useState(1);
 
   // Validation modal state
   const [validationModal, setValidationModal] = useState({
@@ -1862,7 +1884,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
   }, []);
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 md:p-8 ">
+    <div className="bg-white rounded-2xl shadow p-6 md:p-8 border-2 border-[#00418B] ">
       {/* Real-time update indicator */}
       {realtimeUpdate && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-pulse">
@@ -1924,36 +1946,50 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </div>
           )}
 
-          {/* Announcements list (faculty: backend, students: backend) */}
+          {/* Announcements list (5 per page) */}
           <div className="space-y-4">
             {announcementsLoading ? (
               <p className="text-blue-700">Loading announcements...</p>
             ) : announcementError ? (
               <p className="text-red-600">{announcementError}</p>
             ) : announcements.length > 0 ? (
-              announcements.map((item) => (
-                <div key={item._id} className="p-4 rounded bg-blue-50 border border-blue-200 shadow-sm flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-blue-900">{item.title}</h3>
-                    <p className="text-xs text-gray-500 mb-2">
-                      Posted on: {new Date(item.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                    <p className="text-sm text-gray-700 break-words overflow-hidden">{item.content}</p>
-                  </div>
-                  {isFaculty && (
-                    <div className="flex gap-2 ml-4">
-                      <button onClick={() => handleEditAnnouncement(item._id, item.title, item.content)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
-                      <button onClick={() => handleDeleteAnnouncement(item._id)} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
-                    </div>
-                  )}
-                </div>
-              ))
+              (() => {
+                const { data, totalPages, current } = paginate(announcements, announcementsPage, ANNOUNCEMENTS_PER_PAGE);
+                return (
+                  <>
+                    {data.map((item) => (
+                      <div key={item._id} className={`p-4 rounded bg-white ${BRAND_BORDER} shadow-sm flex justify-between items-start`}>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-blue-900">{item.title}</h3>
+                          <p className="text-xs text-gray-500 mb-2">
+                            Posted on: {new Date(item.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                          <p className="text-sm text-gray-700 break-words overflow-hidden">{item.content}</p>
+                        </div>
+                        {isFaculty && (
+                          <div className="flex gap-2 ml-4">
+                            <button onClick={() => handleEditAnnouncement(item._id, item.title, item.content)} className="bg-yellow-400 hover:bg-yellow-500 text-xs px-2 py-1 rounded font-bold">Edit</button>
+                            <button onClick={() => handleDeleteAnnouncement(item._id)} className="bg-red-600 hover:bg-red-700 text-xs px-2 py-1 rounded text-white font-bold">Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {totalPages > 1 && (
+                      <div className="flex justify-center items-center gap-3">
+                        <button className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50" onClick={() => setAnnouncementsPage(p => Math.max(1, p - 1))} disabled={current === 1}>Previous</button>
+                        <span className="text-sm">Page {current} of {totalPages}</span>
+                        <button className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => setAnnouncementsPage(p => Math.min(totalPages, p + 1))} disabled={current === totalPages}>Next</button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             ) : (
               <p className="text-sm text-gray-700">No announcements yet.</p>
             )}
@@ -2026,7 +2062,7 @@ export default function ClassContent({ selected, isFaculty = false }) {
               </div>
             )}
           </div>
-          {/* Assignment/Quiz list grouped by date and unposted at top */}
+          {/* Assignment/Quiz list grouped by date and unposted at top, paginated (5 per page) */}
           <div className="space-y-4">
             {assignmentsLoading ? (
               <p className="text-blue-700">Loading assignments...</p>
@@ -2053,16 +2089,22 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   groupedByDate[dateKey].push(item);
                 });
                 const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
+                // Flatten lists to paginate
+                const flattened = [
+                  ...unposted,
+                  ...sortedDateKeys.flatMap(k => groupedByDate[k])
+                ];
+                const { data, totalPages, current } = paginate(flattened, classworkPage, CLASSWORK_PER_PAGE);
                 return (
                   <>
                     {/* Unposted at the top */}
-                    {unposted.length > 0 && (
+                    {data.some(i => !i.isPosted) && (
                       <div className="mb-6">
                         <h4 className="text-lg font-semibold text-gray-700 mb-3">Not Yet Posted</h4>
-                        {unposted.map(item => (
+                        {data.filter(i => !i.isPosted).map(item => (
                   <div
                     key={item._id}
-                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-gray-100 border-gray-300 opacity-75 mb-2`}
+                            className={`p-4 rounded-xl ${BRAND_BORDER} shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white opacity-75 mb-2`}
                     onClick={() => {
                       if (item.type === 'quiz') {
                         if (isFaculty) {
@@ -2109,18 +2151,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                         ))}
                         </div>
                       )}
-                    {/* Posted grouped by date */}
-                    {sortedDateKeys.map(dateKey => (
-                      <div key={dateKey}>
+                    {/* Posted items */}
+                    {data.some(i => i.isPosted) && (
+                      <div>
                         <div className="mb-4 mt-6 first:mt-0">
-                          <h4 className="text-lg font-semibold text-gray-700 mb-3">{new Date(dateKey).toLocaleDateString('en-US', {
-                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                          })}</h4>
-                    </div>
-                        {groupedByDate[dateKey].map(item => (
+                          <h4 className="text-lg font-semibold text-gray-700 mb-3">Posted</h4>
+                        </div>
+                        {data.filter(i => i.isPosted).map(item => (
                           <div
                             key={item._id}
-                            className={`p-4 rounded-xl border shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white border-blue-200 hover:bg-blue-50 mb-2`}
+                            className={`p-4 rounded-xl ${BRAND_BORDER} shadow flex flex-col md:flex-row md:items-center md:justify-between gap-4 cursor-pointer transition relative bg-white hover:bg-blue-50 mb-2`}
                             onClick={() => {
                               if (item.type === 'quiz') {
                                 if (isFaculty) {
@@ -2161,8 +2201,16 @@ export default function ClassContent({ selected, isFaculty = false }) {
                     )}
                   </div>
                         ))}
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                          <div className="flex justify-center items-center gap-3 mt-4">
+                            <button className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50" onClick={() => setClassworkPage(p => Math.max(1, p - 1))} disabled={current === 1}>Previous</button>
+                            <span className="text-sm">Page {current} of {totalPages}</span>
+                            <button className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => setClassworkPage(p => Math.min(totalPages, p + 1))} disabled={current === totalPages}>Next</button>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                    )}
                   </>
                 );
               })()
@@ -2248,14 +2296,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
             </div>
           </form>
         )}
-          {/* Card/Table style for lessons */}
+          {/* Card/Table style for lessons with pagination (5 per page) */}
           {backendLessons.length > 0 ? (
-            backendLessons.map(lesson => (
-              <div key={lesson._id} className="rounded-xl shadow border border-gray-200 mb-6 overflow-hidden">
+            (() => {
+              const { data, totalPages, current } = paginate(backendLessons, materialsPage, MATERIALS_PER_PAGE);
+              return (
+                <>
+                  {data.map(lesson => (
+              <div key={lesson._id} className={`rounded-xl shadow ${BRAND_BORDER} mb-6 overflow-hidden`}>
                 {/* Blue header */}
                 <div className="bg-blue-900 text-white px-6 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">📄</span>
                     <span className="font-bold text-lg">{lesson.title}</span>
                   </div>
                   {isFaculty && (
@@ -2284,7 +2335,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                       {lesson.link && (
                         <tr className="border-b hover:bg-gray-50">
                           <td className="px-6 py-2 flex items-center gap-2">
-                            <span className="text-blue-700">🔗</span>
                             <a
                               href={lesson.link}
                               target="_blank"
@@ -2303,7 +2353,6 @@ export default function ClassContent({ selected, isFaculty = false }) {
                           return (
                             <tr key={file.fileUrl} className="border-b hover:bg-gray-50">
                               <td className="px-6 py-2 flex items-center gap-2">
-                                <span className="text-blue-700">📄</span>
                                 <a
                                   href={fileUrl}
                                   target="_blank"
@@ -2390,7 +2439,17 @@ export default function ClassContent({ selected, isFaculty = false }) {
                   </table>
                 </div>
               </div>
-            ))
+                  ))}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-3">
+                      <button className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50" onClick={() => setMaterialsPage(p => Math.max(1, p - 1))} disabled={current === 1}>Previous</button>
+                      <span className="text-sm">Page {current} of {totalPages}</span>
+                      <button className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => setMaterialsPage(p => Math.min(totalPages, p + 1))} disabled={current === totalPages}>Next</button>
+                    </div>
+                  )}
+                </>
+              );
+            })()
           ) : (
             <p className="text-sm text-gray-700">No materials yet.</p>
           )}
@@ -3163,46 +3222,64 @@ export default function ClassContent({ selected, isFaculty = false }) {
                 </div>
               ) : (
                 members.students.length > 0 ? (
-                  <div className="space-y-2">
-                    {members.students.map(s => (
-                      <div key={s.userID || s._id} className="flex items-center justify-between bg-gray-50 p-3 rounded border">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium overflow-hidden">
-                            {s.profilePicture ? (
-                              <img 
-                                src={s.profilePicture} 
-                                alt={`${s.firstname} ${s.lastname}`}
-                                className="w-full h-full object-cover rounded-full"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.nextSibling.style.display = 'flex';
-                                }}
-                              />
-                            ) : null}
-                            <div className={`w-full h-full flex items-center justify-center text-sm font-medium ${s.profilePicture ? 'hidden' : 'flex'}`}>
-                              {s.firstname?.[0]}{s.lastname?.[0]}
+                  (() => {
+                    const { data, totalPages, current } = paginate(members.students, membersPage, MEMBERS_PER_PAGE);
+                    return (
+                      <>
+                        {/* Two columns: 10 on left, 10 on right */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {[data.slice(0, 10), data.slice(10, 20)].map((col, idx) => (
+                            <div key={idx} className="space-y-3">
+                              {col.map(s => (
+                                <div key={s.userID || s._id} className={`bg-white p-3 rounded ${BRAND_BORDER} shadow-sm`}>
+                                  <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                                  {s.profilePicture ? (
+                                    <img 
+                                      src={s.profilePicture} 
+                                      alt={`${s.firstname} ${s.lastname}`}
+                                      className="w-full h-full object-cover rounded-full"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div className={`w-full h-full flex items-center justify-center text-sm font-medium ${s.profilePicture ? 'hidden' : 'flex'}`}>
+                                    {s.firstname?.[0]}{s.lastname?.[0]}
+                                  </div>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-medium text-gray-900 truncate">{s.firstname} {s.lastname}</div>
+                                  <div className="text-xs text-blue-700 font-medium truncate">ID: {s.schoolID || s.userID || 'N/A'}</div>
+                                  <div className="mt-1">
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                      (s.registrationStatus || '').toLowerCase() === 'active'
+                                        ? 'bg-green-100 text-green-700 border-green-300'
+                                        : 'bg-yellow-100 text-yellow-700 border-yellow-300'
+                                    }`}>
+                                      {(s.registrationStatus || '').toLowerCase() === 'active' ? 'Active' : 'Pending'}
+                                    </span>
+                                  </div>
+                                  </div>
+                                </div>
+                              </div>
+                              ))}
                             </div>
-                          </div>
-                          <div>
-                            <div className="font-medium flex items-center gap-2">
-                              {s.firstname} {s.lastname}
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                s.registrationStatus === 'active' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {s.registrationStatus === 'active' ? '✅ Active' : '⏳ Pending'}
-                              </span>
-                            </div>
-                            <div className="text-sm text-blue-600 font-medium">ID: {s.schoolID || s.userID || 'N/A'}</div>
-                          </div>
+                          ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                        {totalPages > 1 && (
+                          <div className="flex justify-center items-center gap-3 mt-4">
+                            <button className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50" onClick={() => setMembersPage(p => Math.max(1, p - 1))} disabled={current === 1}>Previous</button>
+                            <span className="text-sm">Page {current} of {totalPages}</span>
+                            <button className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50" onClick={() => setMembersPage(p => Math.min(totalPages, p + 1))} disabled={current === totalPages}>Next</button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <div className="text-4xl mb-2">👥</div>
                     <p className="font-medium">No students in this class yet</p>
                     <p className="text-sm text-gray-400">
                       {isFaculty ? 'Click "Edit Members" to add students to this class' : 'Students will appear here once they are added to the class'}

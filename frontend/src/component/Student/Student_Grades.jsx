@@ -361,7 +361,7 @@ export default function Student_Grades() {
         </div>
 
         {/* Current Academic Period Info */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-[#00418B]">
           <h3 className="text-lg font-semibold mb-4">Current Academic Period</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -386,21 +386,21 @@ export default function Student_Grades() {
           const quarterLabels = isTerm1 ? { q1: '1st Quarter', q2: '2nd Quarter' } : { q1: '3rd Quarter', q2: '4th Quarter' };
           
           return (
-            <div key={termName} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+            <div key={termName} className="bg-white rounded-lg shadow-md overflow-hidden mb-6 border-2 border-[#00418B]">
               <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300 text-sm">
+                <table className="min-w-full border-2 border-[#00418B] text-sm">
                   <thead>
                     <tr>
-                      <th colSpan="5" className="text-center p-3 border-b font-bold text-lg bg-blue-50">
+                      <th colSpan="5" className="text-center p-3 border-b-2 border-[#00418B] font-bold text-lg bg-blue-50">
                         {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : ''} {getSemesterName(termName)}
                       </th>
                     </tr>
                     <tr className="bg-gray-100">
-                      <th className="p-3 border border-gray-300 font-semibold text-left">Subject Description</th>
-                      <th className="p-3 border border-gray-300 font-semibold text-center">{quarterLabels.q1}</th>
-                      <th className="p-3 border border-gray-300 font-semibold text-center">{quarterLabels.q2}</th>
-                      <th className="p-3 border border-gray-300 font-semibold text-center">Term Final Grade</th>
-                      <th className="p-3 border border-gray-300 font-semibold text-center">Remarks</th>
+                      <th className="p-3 border border-[#00418B] font-semibold text-left">Subject Description</th>
+                      <th className="p-3 border border-[#00418B] font-semibold text-center">{quarterLabels.q1}</th>
+                      <th className="p-3 border border-[#00418B] font-semibold text-center">{quarterLabels.q2}</th>
+                      <th className="p-3 border border-[#00418B] font-semibold text-center">Term Final Grade</th>
+                      <th className="p-3 border border-[#00418B] font-semibold text-center">Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -414,19 +414,19 @@ export default function Student_Grades() {
                       
                       return (
                         <tr key={index} className="hover:bg-gray-50">
-                          <td className="p-3 border border-gray-300">
+                          <td className="p-3 border border-[#00418B]">
                             {subject.subjectDescription}
                           </td>
-                          <td className="p-3 border border-gray-300 text-center">
+                          <td className="p-3 border border-[#00418B] text-center">
                             {quarter1 || '-'}
                           </td>
-                          <td className="p-3 border border-gray-300 text-center">
+                          <td className="p-3 border border-[#00418B] text-center">
                             {quarter2 || '-'}
                           </td>
-                          <td className="p-3 border border-gray-300 text-center font-semibold">
+                          <td className="p-3 border border-[#00418B] text-center font-semibold">
                             {termFinalGrade || '-'}
                           </td>
-                          <td className="p-3 border border-gray-300 text-center">
+                          <td className="p-3 border border-[#00418B] text-center">
                             {remarks || '-'}
                           </td>
                         </tr>
@@ -435,16 +435,16 @@ export default function Student_Grades() {
                     
                     {/* General Average Row - Only Term Final */}
                     <tr className="bg-blue-50 font-bold">
-                      <td className="p-3 border border-gray-300 text-center font-semibold">
+                      <td className="p-3 border border-[#00418B] text-center font-semibold">
                         General Average
                       </td>
-                      <td className="p-3 border border-gray-300 text-center">
+                      <td className="p-3 border border-[#00418B] text-center">
                         -
                       </td>
-                      <td className="p-3 border border-gray-300 text-center">
+                      <td className="p-3 border border-[#00418B] text-center">
                         -
                       </td>
-                      <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
+                      <td className="p-3 border border-[#00418B] text-center bg-blue-100 font-semibold">
                         {(() => {
                           const termFinalGrades = (termGrades || [])
                             .map(g => g.termFinalGrade)
@@ -458,7 +458,7 @@ export default function Student_Grades() {
                           return '-';
                         })()}
                       </td>
-                      <td className="p-3 border border-gray-300 text-center bg-blue-100 font-semibold">
+                      <td className="p-3 border border-[#00418B] text-center bg-blue-100 font-semibold">
                         {(() => {
                           const termFinalGrades = (termGrades || [])
                             .map(g => g.termFinalGrade)
@@ -511,7 +511,7 @@ export default function Student_Grades() {
         )}
 
         {/* Grade Legend */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6 border-2 border-[#00418B]">
           <h3 className="text-lg font-semibold mb-4">Grade Legend</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>

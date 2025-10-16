@@ -229,7 +229,7 @@ export default function Student_Dashboard() {
         {/* Suggest change password modal */}
         {showSuggestPw && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md border-2 border-[#00418B]">
               <h3 className="text-xl font-semibold mb-2">Change Password</h3>
               <p className="text-sm text-gray-600 mb-4">To improve your account security, please change your password.</p>
               <div className="flex items-center justify-between mb-4">
@@ -257,7 +257,7 @@ export default function Student_Dashboard() {
         )}
         {showChangePwModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md border-2 border-[#00418B]">
               <h3 className="text-lg font-semibold mb-2">Open Change Password</h3>
               <p className="text-sm text-gray-600 mb-4">Open your profile and use the Change Password option.</p>
               <div className="flex justify-end gap-2">
@@ -291,7 +291,7 @@ export default function Student_Dashboard() {
         {/* Announcements */}
         {announcements.length > 0 && (
           <div className="mb-6">
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+            <div className="bg-white rounded-2xl shadow p-4 md:p-6 border-2 border-[#00418B]">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-lg font-semibold">Announcements</h4>
                 <button
@@ -347,7 +347,7 @@ export default function Student_Dashboard() {
               <div
                 key={cls.classID}
                 className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
-                style={{ minHeight: "240px", borderRadius: "28px" }}
+                style={{ minHeight: "240px" }}
                 onClick={() =>
                   (window.location.href = `/student_class/${cls.classID}`)
                 }
@@ -356,8 +356,6 @@ export default function Student_Dashboard() {
                   className="flex items-center justify-center bg-gray-500"
                   style={{
                     height: "160px",
-                    borderTopLeftRadius: "28px",
-                    borderTopRightRadius: "28px",
                   }}
                 >
                   {cls.image ? (
@@ -369,29 +367,14 @@ export default function Student_Dashboard() {
                       }
                       alt="Class"
                       className="object-cover w-full h-full"
-                      style={{
-                        maxHeight: "160px",
-                        borderTopLeftRadius: "28px",
-                        borderTopRightRadius: "28px",
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                      }}
                     />
                   ) : (
                     <span className="text-white text-xl font-bold">image</span>
                   )}
                 </div>
 
-                <div
-                  className="flex items-center justify-between bg-[#00418b] px-6 py-4"
-                  style={{
-                    borderRadius: 0,
-                    borderBottomLeftRadius: "28px",
-                    borderBottomRightRadius: "28px",
-                    marginTop: 0,
-                  }}
-                >
-                  <div>
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4 flex-grow">
+                  <div className="flex flex-col justify-center min-h-[60px]">
                     <div className="text-lg font-bold text-white">{cls.subjectName || cls.className || 'Subject Name'}</div>
                     <div className="text-white text-base">{cls.sectionName || cls.section || cls.classCode || 'Section Name'}</div>
                   </div>

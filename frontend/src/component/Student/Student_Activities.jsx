@@ -829,12 +829,6 @@ export default function Student_Activities() {
             </div>
           )}
           
-          {/* Loading Display */}
-          {loading && (
-            <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4">
-              <strong>Loading...</strong> Fetching activities...
-            </div>
-          )}
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div>
@@ -889,21 +883,24 @@ export default function Student_Activities() {
 
 
 
-          {/* Tabs */}
-          <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
-            {tabs.map((tab) => (
-              <li
-                key={tab.id}
-                className={`me-4 cursor-pointer py-2 px-4 ${activeTab === tab.id
-                    ? "text-black border-b-4 border-blue-500"
-                    : "hover:text-gray-600"
+          {/* Tabs - brand-consistent with AdminSupportCenter */}
+          <div className="border-b border-[#00418B] mb-2">
+            <div className="flex overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-base sm:text-lg font-medium whitespace-nowrap flex items-center ${
+                    activeTab === tab.id
+                      ? 'border-b-2 border-[#00418B] text-[#00418B]'
+                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </li>
-            ))}
-          </ul>
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Content */}
           <div className="mt-6">
@@ -929,7 +926,7 @@ export default function Student_Activities() {
                         </svg>
                       </button>
                       {showFilterDropdown && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border-2 border-[#00418B] rounded shadow-lg z-10">
                           {["All", "Quiz", "Assignment"].map((option) => (
                             <button
                               key={option}
@@ -961,7 +958,7 @@ export default function Student_Activities() {
                         </svg>
                       </button>
                       {showActivityTypeFilterDropdown && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded shadow-lg z-10">
+                        <div className="absolute top-full left-0 mt-1 w-full bg-white border-2 border-[#00418B] rounded shadow-lg z-10">
                           {["All", "Written Works", "Performance Task"].map((option) => (
                             <button
                               key={option}
@@ -993,7 +990,7 @@ export default function Student_Activities() {
                         </svg>
                       </button>
                       {showClassFilterDropdown && (
-                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 max-h-64 overflow-y-auto min-w-[200px]">
+                        <div className="absolute top-full left-0 mt-1 bg-white border-2 border-[#00418B] rounded shadow-lg z-10 max-h-64 overflow-y-auto min-w-[200px]">
                           {['All Classes', ...[...new Set(studentClasses.map(cls => cls.className).filter(Boolean))].sort((a, b) => a.localeCompare(b))].map((option, idx) => (
                             <button
                               key={idx}

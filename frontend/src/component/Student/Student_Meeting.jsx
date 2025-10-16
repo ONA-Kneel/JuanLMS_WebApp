@@ -248,65 +248,43 @@ export default function Student_Meeting() {
           </div>
         ) : (
           <>
-            {/* Tab Navigation */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-                <button
-                  onClick={() => setActiveTab('class-meetings')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'class-meetings'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Users className="w-4 h-4" />
-                    Class Meetings
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('invited-meetings')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'invited-meetings'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <UserPlus className="w-4 h-4" />
-                    Direct Invitations
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('host-meeting')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'host-meeting'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <Video className="w-4 h-4" />
-                    Host Meeting
-                  </div>
-                </button>
+            {/* Unified container: tabs + content inside one brand-outlined card */}
+            <div className="bg-white rounded-lg shadow-sm border-2 border-[#00418B] p-6 mb-6">
+              <div className="border-b border-[#00418B] mb-4">
+                <div className="flex overflow-x-auto">
+                  {[
+                    { id: 'class-meetings', label: 'Class Meetings' },
+                    { id: 'invited-meetings', label: 'Direct Invitations' },
+                    { id: 'host-meeting', label: 'Host Meeting' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`px-4 py-2 text-base font-medium whitespace-nowrap flex items-center ${
+                        activeTab === tab.id
+                          ? 'border-b-2 border-[#00418B] text-[#00418B]'
+                          : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Tab Content */}
-            {activeTab === 'class-meetings' && (
-              <>
-                {/* Class Selector */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Class</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Tab Content */}
+              {activeTab === 'class-meetings' && (
+                <>
+                  {/* Class Selector */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Class</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {classes.map((classItem) => (
                   <button
                     key={classItem._id}
                     onClick={() => setSelectedClass(classItem)}
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       selectedClass?._id === classItem._id
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        ? 'border-2 border-[#00418B] bg-blue-50 text-[#00418B]'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                     }`}
                   >
@@ -326,78 +304,80 @@ export default function Student_Meeting() {
                     </div>
                   </button>
                 ))}
-              </div>
-            </div>
-
-            {/* Meeting List - Join Only */}
-            {selectedClass && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                      <Video className="w-8 h-8 text-blue-600" />
-                      Meetings for {selectedClass.className || selectedClass.name}
-                    </h2>
-                    <p className="text-gray-600 mt-1">
-                      Class ID: {selectedClass._id}
-                    </p>
                   </div>
-                </div>
 
-                <MeetingList
-                  classId={selectedClass._id}
-                  userRole="student"
-                  onJoinMeeting={handleJoinMeeting}
-                  refreshTrigger={meetingRefreshTrigger}
-                />
-              </div>
-            )}
-              </>
-            )}
+                  {/* Meeting List - Join Only */}
+                  {selectedClass && (
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                            <Video className="w-8 h-8 text-blue-600" />
+                            Meetings for {selectedClass.className || selectedClass.name}
+                          </h2>
+                          <p className="text-gray-600 mt-1">
+                            Class ID: {selectedClass._id}
+                          </p>
+                        </div>
+                      </div>
 
-            {/* Invited Meetings Tab */}
-            {activeTab === 'invited-meetings' && (
-              <InvitedMeetings
-                onJoinMeeting={handleJoinMeeting}
-                refreshTrigger={meetingRefreshTrigger}
-              />
-            )}
+                      <MeetingList
+                        classId={selectedClass._id}
+                        userRole="student"
+                        onJoinMeeting={handleJoinMeeting}
+                        refreshTrigger={meetingRefreshTrigger}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
 
-            {/* Host Meeting Tab */}
-            {activeTab === 'host-meeting' && (
-              <>
-                {/* Student Hosted Meetings List */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Hosted Meetings</h3>
-                  <MeetingList
-                    classId="direct-invite" // Special identifier for direct invitation meetings
-                    userRole="student"
+              {/* Invited Meetings Tab */}
+              {activeTab === 'invited-meetings' && (
+                <div className="mt-2">
+                  <InvitedMeetings
                     onJoinMeeting={handleJoinMeeting}
                     refreshTrigger={meetingRefreshTrigger}
                   />
                 </div>
+              )}
 
-                {/* Student Selection Section */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Select Students to Invite</h3>
-                    <button
-                      onClick={() => setShowCreateMeetingModal(true)}
-                      disabled={selectedStudents.length === 0}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Create Meeting ({selectedStudents.length})
-                    </button>
+              {/* Host Meeting Tab */}
+              {activeTab === 'host-meeting' && (
+                <>
+                  {/* Student Hosted Meetings List */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Hosted Meetings</h3>
+                    <MeetingList
+                      classId="direct-invite" // Special identifier for direct invitation meetings
+                      userRole="student"
+                      onJoinMeeting={handleJoinMeeting}
+                      refreshTrigger={meetingRefreshTrigger}
+                    />
                   </div>
 
-                  <StudentUserSelector
-                    selectedUsers={selectedStudents}
-                    onUsersChange={setSelectedStudents}
-                  />
-                </div>
-              </>
-            )}
+                  {/* Student Selection Section */}
+                  <div className="">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Select Students to Invite</h3>
+                      <button
+                        onClick={() => setShowCreateMeetingModal(true)}
+                        disabled={selectedStudents.length === 0}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <Plus className="w-5 h-5" />
+                        Create Meeting ({selectedStudents.length})
+                      </button>
+                    </div>
+
+                    <StudentUserSelector
+                      selectedUsers={selectedStudents}
+                      onUsersChange={setSelectedStudents}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
 
