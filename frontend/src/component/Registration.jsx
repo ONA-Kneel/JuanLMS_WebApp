@@ -14,7 +14,8 @@ export default function Registration() {
     role: 'students',
     trackName: '',
     strandName: '',
-    sectionName: ''
+    sectionName: '',
+    agreeToPrivacyPolicy: false
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,7 @@ export default function Registration() {
     title: '',
     message: ''
   });
+  const [privacyModal, setPrivacyModal] = useState(false);
   const [studentDetails, setStudentDetails] = useState(null);
   const [isCheckingStudent, setIsCheckingStudent] = useState(false);
   const [studentOptions, setStudentOptions] = useState([]);
@@ -57,7 +59,7 @@ export default function Registration() {
     }
   };
 
-  // Function to filter students based on input - only show exact matches
+  // Function to filter students based on input - only show exact matches for privacy
   const filterStudents = (input) => {
     if (!input || input.length < 1) {
       setFilteredStudents([]);
@@ -87,7 +89,7 @@ export default function Registration() {
     setForm(prev => ({
       ...prev,
       schoolID: student.studentSchoolID,
-      personalEmail: student.personalEmail || '',
+      personalEmail: student.personalEmail || prev.personalEmail, // Preserve existing email if student doesn't have one
       firstName: student.firstName,
       lastName: student.lastName,
       trackName: student.trackName,
@@ -248,6 +250,10 @@ export default function Registration() {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Email', message: 'Please enter a valid email address (e.g., username@gmail.com).' });
       setLoading(false); return;
     }
+    if (!form.agreeToPrivacyPolicy) {
+      setValidationModal({ isOpen: true, type: 'warning', title: 'Privacy Policy Agreement Required', message: 'You must agree to the Privacy Policy to continue with registration.' });
+      setLoading(false); return;
+    }
 
     try {
       const res = await axios.post(`${API_BASE}/api/registrants/register`, form);
@@ -337,10 +343,10 @@ export default function Registration() {
                 name="personalEmail" 
                 required 
                 placeholder="username@sjdefi.edu.ph" 
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900 ${studentDetails ? 'bg-gray-100' : ''}`} 
+                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
                 value={form.personalEmail} 
                 onChange={handleChange} 
-                disabled={loading || isCheckingStudent || (studentDetails ? true : false)} 
+                disabled={loading || isCheckingStudent} 
               />
             </div>
             <div className="relative">
@@ -352,17 +358,17 @@ export default function Registration() {
                 className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
                 value={form.schoolID} 
                 onChange={handleChange} 
-                disabled={loading || isCheckingStudent || (studentDetails ? true : false)} 
+                disabled={loading || isCheckingStudent} 
                 placeholder={getSchoolIdPlaceholder()} 
                 onFocus={() => {
-                  if (!studentDetails && form.schoolID.length >= 1) {
+                  if (form.schoolID.length >= 1) {
                     filterStudents(form.schoolID);
                   }
                 }}
               />
               
               {/* Student ID Dropdown */}
-              {showStudentDropdown && filteredStudents.length > 0 && !studentDetails && (
+              {showStudentDropdown && filteredStudents.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                   {filteredStudents.map((student, index) => (
                     <div
@@ -450,12 +456,36 @@ export default function Registration() {
             </button>
           )}
 
+          {/* Privacy Policy Agreement - only show when student details are loaded */}
+          {studentDetails && (
+            <div className="mb-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="agreeToPrivacyPolicy"
+                  checked={form.agreeToPrivacyPolicy}
+                  onChange={handleChange}
+                  className="mt-1 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  required
+                />
+                <span className="text-sm text-gray-700">
+                  I agree to the <span 
+                    className="text-blue-600 underline cursor-pointer hover:text-blue-800" 
+                    onClick={() => setPrivacyModal(true)}
+                  >
+                    Privacy Policy
+                  </span> and consent to the collection, processing, and storage of my personal information for the purpose of student registration and academic management. I understand that my data will be used in accordance with the school's data protection policies.
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Submit button - only show when student details are loaded */}
           {studentDetails && (
             <button 
               type="submit" 
-              className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition" 
-              disabled={loading}
+              className="w-full bg-blue-900 text-white p-3 rounded-lg hover:bg-blue-950 transition disabled:bg-gray-400 disabled:cursor-not-allowed" 
+              disabled={loading || !form.agreeToPrivacyPolicy}
             >
               {loading ? 'Registering...' : 'Register'}
             </button>
@@ -471,6 +501,124 @@ export default function Registration() {
           confirmText={validationModal.confirmText}
           showCancel={validationModal.showCancel}
         />
+        
+        {/* Privacy Policy Modal */}
+        {privacyModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              <div className="flex justify-between items-center p-6 border-b">
+                <h2 className="text-2xl font-bold text-gray-900">Privacy Policy</h2>
+                <button
+                  onClick={() => setPrivacyModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="prose max-w-none">
+                  <p className="text-sm text-gray-600 mb-4">Last updated: October 16, 2025</p>
+                  
+                  <p className="mb-4">
+                    This Privacy Policy describes Our policies and procedures on the collection, use and disclosure of Your information when You use the Service and tells You about Your privacy rights and how the law protects You.
+                  </p>
+                  
+                  <p className="mb-4">
+                    We use Your Personal data to provide and improve the Service. By using the Service, You agree to the collection and use of information in accordance with this Privacy Policy. This Privacy Policy has been created with the help of the Privacy Policy Generator.
+                  </p>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Interpretation and Definitions</h3>
+                  
+                  <h4 className="text-md font-semibold mt-4 mb-2">Interpretation</h4>
+                  <p className="mb-4">
+                    The words whose initial letters are capitalized have meanings defined under the following conditions. The following definitions shall have the same meaning regardless of whether they appear in singular or in plural.
+                  </p>
+
+                  <h4 className="text-md font-semibold mt-4 mb-2">Definitions</h4>
+                  <p className="mb-2">For the purposes of this Privacy Policy:</p>
+                  
+                  <ul className="list-disc pl-6 mb-4 space-y-2">
+                    <li><strong>Account</strong> means a unique account created for You to access our Service or parts of our Service.</li>
+                    <li><strong>Affiliate</strong> means an entity that controls, is controlled by, or is under common control with a party, where "control" means ownership of 50% or more of the shares, equity interest or other securities entitled to vote for election of directors or other managing authority.</li>
+                    <li><strong>Company</strong> (referred to as either "the Company", "We", "Us" or "Our" in this Agreement) refers to JuanLMS.</li>
+                    <li><strong>Cookies</strong> are small files that are placed on Your computer, mobile device or any other device by a website, containing the details of Your browsing history on that website among its many uses.</li>
+                    <li><strong>Country</strong> refers to: Philippines</li>
+                    <li><strong>Device</strong> means any device that can access the Service such as a computer, a cell phone or a digital tablet.</li>
+                    <li><strong>Personal Data</strong> is any information that relates to an identified or identifiable individual.</li>
+                    <li><strong>Service</strong> refers to the Website.</li>
+                    <li><strong>Service Provider</strong> means any natural or legal person who processes the data on behalf of the Company. It refers to third-party companies or individuals employed by the Company to facilitate the Service, to provide the Service on behalf of the Company, to perform services related to the Service or to assist the Company in analyzing how the Service is used.</li>
+                    <li><strong>Usage Data</strong> refers to data collected automatically, either generated by the use of the Service or from the Service infrastructure itself (for example, the duration of a page visit).</li>
+                    <li><strong>Website</strong> refers to JuanLMS, accessible from https://sjdefilms.com</li>
+                    <li><strong>You</strong> means the individual accessing or using the Service, or the company, or other legal entity on behalf of which such individual is accessing or using the Service, as applicable.</li>
+                  </ul>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Collecting and Using Your Personal Data</h3>
+                  
+                  <h4 className="text-md font-semibold mt-4 mb-2">Types of Data Collected</h4>
+                  
+                  <h5 className="text-sm font-semibold mt-3 mb-2">Personal Data</h5>
+                  <p className="mb-2">While using Our Service, We may ask You to provide Us with certain personally identifiable information that can be used to contact or identify You. Personally identifiable information may include, but is not limited to:</p>
+                  <ul className="list-disc pl-6 mb-4">
+                    <li>Email address</li>
+                    <li>First name and last name</li>
+                    <li>Usage Data</li>
+                  </ul>
+
+                  <h5 className="text-sm font-semibold mt-3 mb-2">Usage Data</h5>
+                  <p className="mb-2">Usage Data is collected automatically when using the Service.</p>
+                  <p className="mb-4">
+                    Usage Data may include information such as Your Device's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that You visit, the time and date of Your visit, the time spent on those pages, unique device identifiers and other diagnostic data.
+                  </p>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Use of Your Personal Data</h3>
+                  <p className="mb-2">The Company may use Personal Data for the following purposes:</p>
+                  <ul className="list-disc pl-6 mb-4 space-y-1">
+                    <li>To provide and maintain our Service, including to monitor the usage of our Service.</li>
+                    <li>To manage Your Account: to manage Your registration as a user of the Service.</li>
+                    <li>For the performance of a contract: the development, compliance and undertaking of the purchase contract for the products, items or services You have purchased.</li>
+                    <li>To contact You: To contact You by email, telephone calls, SMS, or other equivalent forms of electronic communication.</li>
+                    <li>To provide You with news, special offers, and general information about other goods, services and events which We offer.</li>
+                    <li>To manage Your requests: To attend and manage Your requests to Us.</li>
+                  </ul>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Security of Your Personal Data</h3>
+                  <p className="mb-4">
+                    The security of Your Personal Data is important to Us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While We strive to use commercially reasonable means to protect Your Personal Data, We cannot guarantee its absolute security.
+                  </p>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Use of DeepSeek Analytics</h3>
+                  <ul className="list-disc pl-6 mb-4 space-y-1">
+                    <li>DeepSeek AI operates strictly under the institution's privacy guidelines.</li>
+                    <li>It processes data only for educational analytics, such as measuring class engagement, predicting student performance risks, and enhancing learning outcomes.</li>
+                    <li>No personal or sensitive information is shared externally, and all insights are aggregated and anonymized.</li>
+                  </ul>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Children's Privacy</h3>
+                  <p className="mb-4">
+                    Our Service does not address anyone under the age of 13. We do not knowingly collect personally identifiable information from anyone under the age of 13. If You are a parent or guardian and You are aware that Your child has provided Us with Personal Data, please contact Us.
+                  </p>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Changes to this Privacy Policy</h3>
+                  <p className="mb-4">
+                    We may update Our Privacy Policy from time to time. We will notify You of any changes by posting the new Privacy Policy on this page. We will let You know via email and/or a prominent notice on Our Service, prior to the change becoming effective and update the "Last updated" date at the top of this Privacy Policy.
+                  </p>
+
+                  <h3 className="text-lg font-semibold mt-6 mb-3">Contact Us</h3>
+                  <p className="mb-4">
+                    If you have any questions about this Privacy Policy, You can contact us:
+                  </p>
+                  <p className="mb-4">
+                    By email: juanlms.sjddefi@gmail.com
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Generated using TermsFeed Privacy Policy Generator
+                  </p>
+                </div>
+              </div>
+             
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
