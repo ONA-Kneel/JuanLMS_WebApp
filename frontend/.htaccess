@@ -27,11 +27,17 @@ Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-R
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
-# Security headers for better protection (relaxed for development)
+# Security headers for better protection
 Header always set X-Content-Type-Options "nosniff"
-Header always set X-Frame-Options "ALLOWALL"
-Header always set X-XSS-Protection "0"
-Header always set Referrer-Policy "no-referrer-when-downgrade"
+Header always set X-Frame-Options "DENY"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+# Strict-Transport-Security (HSTS) - Only for HTTPS
+Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" env=HTTPS
+
+# Permissions-Policy - Comprehensive browser feature restrictions
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), bluetooth=(), clipboard-read=(), clipboard-write=(), device-memory=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), gamepad=(), gyroscope=(), keyboard-map=(), magnetometer=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), speaker-selection=(), storage-access=(), sync-xhr=(), unoptimized-images=(), unsized-media=(), usb=(), vertical-scroll=(), vibrate=(), wake-lock=(), web-share=(), xr-spatial-tracking=()"
 
 # Cache static assets with longer expiration for better performance
 <IfModule mod_expires.c>
