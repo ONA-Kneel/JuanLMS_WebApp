@@ -1,10 +1,9 @@
 // Service Worker for Push Notifications (Development-friendly)
-const CACHE_NAME = 'juanlms-v3'; // Increment version to force cache refresh
+const CACHE_NAME = 'juanlms-v4'; // Increment version to force cache refresh
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json'
+  // Note: Removed specific asset references as they change with each build
 ];
 
 // Check if we're in development mode (localhost)
@@ -31,10 +30,17 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
+    }).then(() => {
+      // Clear all caches and reload if this is a new version
+      console.log('New service worker activated, clearing all caches');
+      return caches.keys().then((cacheNames) => {
+        return Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+      });
     })
   );
   // Take control of all clients immediately
@@ -51,6 +57,13 @@ self.addEventListener('fetch', (event) => {
     
     // For API requests, let them pass through without interference
     // This prevents the service worker from interfering with API calls
+    return;
+  }
+  
+  // Skip caching for assets with hashes (they're already cache-busted)
+  if (event.request.url.includes('/assets/') && 
+      (event.request.url.includes('.js') || event.request.url.includes('.css'))) {
+    // Let these pass through without caching to avoid stale asset issues
     return;
   }
   
