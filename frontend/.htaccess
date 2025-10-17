@@ -5,8 +5,11 @@
     
     # Handle client-side routing for all new routes
     # This ensures all React Router routes work properly
+    # BUT exclude static assets from being rewritten to index.html
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !^/assets/
+    RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ [NC]
     RewriteRule ^(.*)$ /index.html [L]
 </IfModule>
 
@@ -15,6 +18,18 @@ Header always set Access-Control-Allow-Origin "*"
 Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
 Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
 
+# Set proper MIME types for static assets
+<IfModule mod_mime.c>
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType font/woff .woff
+    AddType font/woff2 .woff2
+    AddType application/font-ttf .ttf
+    AddType application/font-otf .otf
+</IfModule>
+
 # Cache control for HTML files only (allow caching of static assets)
 <IfModule mod_headers.c>
     # Only apply no-cache to HTML files
@@ -22,6 +37,15 @@ Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-R
         Header set Cache-Control "no-cache, no-store, must-revalidate"
         Header set Pragma "no-cache"
         Header set Expires "0"
+    </FilesMatch>
+    
+    # Set proper content type for CSS and JS files
+    <FilesMatch "\.css$">
+        Header set Content-Type "text/css"
+    </FilesMatch>
+    
+    <FilesMatch "\.js$">
+        Header set Content-Type "application/javascript"
     </FilesMatch>
 </IfModule>
 
