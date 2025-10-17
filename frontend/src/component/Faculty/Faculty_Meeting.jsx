@@ -524,12 +524,12 @@ const Faculty_Meeting = () => {
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
             isHost={true}
-            hostUserId={'Eggplant_Soybean'}
+            hostUserId={'Angry_Attic'}
             credentials={{
               apiKey: 'mmhfdzb5evj2',
-            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL0VnZ3BsYW50X1NveWJlYW4iLCJ1c2VyX2lkIjoiRWdncGxhbnRfU295YmVhbiIsInZhbGlkaXR5X2luX3NlY29uZHMiOjYwNDgwMCwiaWF0IjoxNzYwNDE1MDc1LCJleHAiOjE3NjEwMTk4NzV9.0Adc50Cb7YtqyV1OE-SdlsFQqsv-G9aJmo5s-FBTSxs',
-            userId: 'Eggplant_Soybean',
-            callId: 'JMXS39xMSEetmwEJcTl8y',
+            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL0FuZ3J5X0F0dGljIiwidXNlcl9pZCI6IkFuZ3J5X0F0dGljIiwidmFsaWRpdHlfaW5fc2Vjb25kcyI6NjA0ODAwLCJpYXQiOjE3NjA2Njk3ODgsImV4cCI6MTc2MTI3NDU4OH0.nSR0BWGd5h_YQ-QGRsy0iUjRNv_XZmUjlUc_QSkkxrA',
+            userId: 'Angry_Attic',
+            callId: 'YqOzpnBajjZCAMlFXryOX',
             }}
           />
         )}
