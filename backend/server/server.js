@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import connect from "./connect.cjs";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import net from 'node:net';
@@ -53,6 +54,139 @@ dotenv.config({ path: './config.env' });
 
 const { ObjectId } = mongoose.Types;
 const app = express();
+
+// Security headers configuration using helmet
+app.use(helmet({
+  // Strict-Transport-Security (HSTS) header - Only enable in production with HTTPS
+  hsts: process.env.NODE_ENV === 'production' ? {
+    maxAge: 63072000, // 2 years in seconds
+    includeSubDomains: true,
+    preload: true
+  } : false,
+  // Permissions-Policy header
+  permissionsPolicy: {
+    camera: [],
+    microphone: [],
+    geolocation: [],
+    interestCohort: [],
+    accelerometer: [],
+    ambientLightSensor: [],
+    autoplay: [],
+    battery: [],
+    bluetooth: [],
+    clipboardRead: [],
+    clipboardWrite: [],
+    deviceMemory: [],
+    displayCapture: [],
+    documentDomain: [],
+    encryptedMedia: [],
+    executionWhileNotRendered: [],
+    executionWhileOutOfViewport: [],
+    fullscreen: [],
+    gamepad: [],
+    gyroscope: [],
+    keyboardMap: [],
+    magnetometer: [],
+    midi: [],
+    navigationOverride: [],
+    payment: [],
+    pictureInPicture: [],
+    publickeyCredentialsGet: [],
+    screenWakeLock: [],
+    serial: [],
+    speakerSelection: [],
+    storageAccess: [],
+    syncXhr: [],
+    unoptimizedImages: [],
+    unsizedMedia: [],
+    usb: [],
+    verticalScroll: [],
+    vibrate: [],
+    wakeLock: [],
+    webShare: [],
+    xrSpatialTracking: []
+  },
+  // Content Security Policy - More permissive for development
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Allow inline scripts for React
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", "https://api.cloudinary.com", "wss:", "ws:"],
+      mediaSrc: ["'self'", "https:", "blob:"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'self'", "https://meet.jit.si"],
+      upgradeInsecureRequests: []
+    }
+  } : false,
+  // X-Content-Type-Options
+  noSniff: true,
+  // X-Frame-Options - Allow for development, deny in production
+  frameguard: process.env.NODE_ENV === 'production' ? { action: 'deny' } : { action: 'sameorigin' },
+  // X-XSS-Protection
+  xssFilter: true,
+  // Referrer-Policy
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+}));
+
+// Custom middleware to ensure security headers are always set
+app.use((req, res, next) => {
+  // Set Strict-Transport-Security header for HTTPS requests
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  }
+  
+  // Set Permissions-Policy header
+  const permissionsPolicy = [
+    'camera=()',
+    'microphone=()',
+    'geolocation=()',
+    'interest-cohort=()',
+    'accelerometer=()',
+    'ambient-light-sensor=()',
+    'autoplay=()',
+    'battery=()',
+    'bluetooth=()',
+    'clipboard-read=()',
+    'clipboard-write=()',
+    'device-memory=()',
+    'display-capture=()',
+    'document-domain=()',
+    'encrypted-media=()',
+    'execution-while-not-rendered=()',
+    'execution-while-out-of-viewport=()',
+    'fullscreen=()',
+    'gamepad=()',
+    'gyroscope=()',
+    'keyboard-map=()',
+    'magnetometer=()',
+    'midi=()',
+    'navigation-override=()',
+    'payment=()',
+    'picture-in-picture=()',
+    'publickey-credentials-get=()',
+    'screen-wake-lock=()',
+    'serial=()',
+    'speaker-selection=()',
+    'storage-access=()',
+    'sync-xhr=()',
+    'unoptimized-images=()',
+    'unsized-media=()',
+    'usb=()',
+    'vertical-scroll=()',
+    'vibrate=()',
+    'wake-lock=()',
+    'web-share=()',
+    'xr-spatial-tracking=()'
+  ].join(', ');
+  
+  res.setHeader('Permissions-Policy', permissionsPolicy);
+  
+  next();
+});
+
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
