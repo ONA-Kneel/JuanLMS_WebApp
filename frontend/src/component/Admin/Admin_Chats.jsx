@@ -1702,6 +1702,7 @@ export default function Admin_Chats() {
                     <button
                       onClick={openFilePicker}
                       className="p-2 text-gray-500 hover:text-gray-700"
+                      title="Attach file"
                     >
                       <img src={uploadfile} alt="Upload" className="w-5 h-5" />
                     </button>
@@ -1711,6 +1712,7 @@ export default function Admin_Chats() {
                       onChange={handleFileSelect}
                       className="hidden"
                       multiple
+                      accept="image/*,.pdf,.doc,.docx,.txt"
                     />
                     <input
                       type="text"
