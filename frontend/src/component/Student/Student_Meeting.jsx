@@ -390,10 +390,10 @@ export default function Student_Meeting() {
             isOpen={!!activeMeeting}
             isHost={false}
             credentials={{
-              aapiKey: 'mmhfdzb5evj2',
-              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL0FuZ3J5X0F0dGljIiwidXNlcl9pZCI6IkFuZ3J5X0F0dGljIiwidmFsaWRpdHlfaW5fc2Vjb25kcyI6NjA0ODAwLCJpYXQiOjE3NjA2Njk3ODgsImV4cCI6MTc2MTI3NDU4OH0.nSR0BWGd5h_YQ-QGRsy0iUjRNv_XZmUjlUc_QSkkxrA',
-              userId: 'Angry_Attic',
-              callId: 'YqOzpnBajjZCAMlFXryOX',
+              apiKey: 'mmhfdzb5evj2',
+            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL1J1bWJsaW5nX0JsYXJuZXkiLCJ1c2VyX2lkIjoiUnVtYmxpbmdfQmxhcm5leSIsInZhbGlkaXR5X2luX3NlY29uZHMiOjYwNDgwMCwiaWF0IjoxNzYwNzU3NDM2LCJleHAiOjE3NjEzNjIyMzZ9.j2T4EL4Tt1LwiYid_7-D44RURuNaTd2J-fhcqmwGldw',
+            userId: 'Rumbling_Blarney',
+            callId: 'AXr1sBv2OJ8UpSZauXYT8',
             }}
           />
         )}
