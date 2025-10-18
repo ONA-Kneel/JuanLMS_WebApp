@@ -1609,6 +1609,7 @@ export default function Principal_Chats() {
                     ref={fileInputRef}
                     style={{ display: "none" }}
                     onChange={handleFileSelect}
+                    accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
                   />
 
                   <img

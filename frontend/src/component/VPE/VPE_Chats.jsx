@@ -1612,7 +1612,7 @@ export default function VPE_Chats() {
                       onChange={handleFileSelect}
                       className="hidden"
                       multiple
-                      accept="image/*,.pdf,.doc,.docx,.txt"
+                      accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
                     />
                     <input
                       type="text"

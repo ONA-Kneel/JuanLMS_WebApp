@@ -1846,7 +1846,7 @@ export default function Faculty_Chats() {
                         onChange={handleFileSelect}
                         style={{ display: "none" }}
                         multiple
-                        accept="image/*,.pdf,.doc,.docx,.txt"
+                        accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
                       />
                       {selectedFiles && selectedFiles.length > 0 && (
                         <div className="flex flex-wrap items-center gap-2">

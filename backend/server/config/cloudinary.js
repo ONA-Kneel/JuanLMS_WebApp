@@ -65,7 +65,7 @@ export const messageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'juanlms/messages',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'mp4', 'mp3'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'mp4', 'mp3', 'xlsx', 'xls'],
     resource_type: 'auto',
   },
 });
