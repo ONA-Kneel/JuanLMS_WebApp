@@ -21,28 +21,7 @@ async function initializeGroupMessageStorage() {
     console.log('[GROUP_MESSAGES] Using Cloudinary storage');
     try {
       const { messageStorage } = await import('../config/cloudinary.js');
-      return multer({ 
-        storage: messageStorage,
-        limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for group messages
-        fileFilter: (req, file, cb) => {
-          const allowedTypes = [
-            'image/jpeg', 'image/jpg', 'image/png',
-            'application/pdf',
-            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'audio/mpeg', 'audio/mp3', 'video/mp4',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel'
-          ];
-          
-          if (allowedTypes.includes(file.mimetype) ||
-              file.originalname.endsWith('.xlsx') ||
-              file.originalname.endsWith('.xls')) {
-            cb(null, true);
-          } else {
-            cb(new Error('File type not allowed. Allowed types: images, PDF, Word docs, audio, video, Excel files'), false);
-          }
-        }
-      });
+      return multer({ storage: messageStorage });
     } catch (error) {
       console.error('[GROUP_MESSAGES] Cloudinary setup failed, falling back to local storage:', error.message);
     }
@@ -63,29 +42,7 @@ async function initializeGroupMessageStorage() {
       cb(null, Date.now() + "-" + file.originalname);
     }
   });
-  
-  return multer({ 
-    storage: localStorage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for group messages
-    fileFilter: (req, file, cb) => {
-      const allowedTypes = [
-        'image/jpeg', 'image/jpg', 'image/png',
-        'application/pdf',
-        'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'audio/mpeg', 'audio/mp3', 'video/mp4',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel'
-      ];
-      
-      if (allowedTypes.includes(file.mimetype) ||
-          file.originalname.endsWith('.xlsx') ||
-          file.originalname.endsWith('.xls')) {
-        cb(null, true);
-      } else {
-        cb(new Error('File type not allowed. Allowed types: images, PDF, Word docs, audio, video, Excel files'), false);
-      }
-    }
-  });
+  return multer({ storage: localStorage });
 }
 
 // Initialize upload middleware
