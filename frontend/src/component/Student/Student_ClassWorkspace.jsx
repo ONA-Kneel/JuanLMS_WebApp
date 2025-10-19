@@ -138,24 +138,24 @@ export default function Student_ClassWorkspace() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
-          <div className="border-b border-[#00418B] mb-4">
-            <div className="flex overflow-x-auto">
+        <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-300">
+          
+          
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setSelected(tab.key)}
-                  className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
+                  className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
                     selected === tab.key 
-                      ? 'border-b-2 border-[#00418B] text-[#00418B]' 
-                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? "bg-white text-blue-900 border border-gray-300 border-b-0"
+                      :  "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
                   }`}
                 >
                   {tab.label}
                 </button>
               ))}
-            </div>
-          </div>
+            
+          
         </div>
 
         {/* Content Area */}
