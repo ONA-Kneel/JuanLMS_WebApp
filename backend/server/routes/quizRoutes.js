@@ -468,7 +468,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
   try {
     const { quizId } = req.params;
     const studentId = req.user ? req.user._id : req.body.studentId;
-    const { answers, violationCount, violationEvents, questionTimes } = req.body;
+    const { answers, violationCount, violationEvents, questionTimes, isTimeoutSubmission } = req.body;
     
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ error: 'Answers are required.' });
@@ -485,20 +485,23 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
     }
     
     // Validate that at least one question has been answered (not empty)
-    const hasValidAnswers = answers.some(answer => {
-      if (answer && answer.answer !== null && answer.answer !== undefined) {
-        if (typeof answer.answer === 'string') {
-          return answer.answer.trim() !== '';
-        } else if (Array.isArray(answer.answer)) {
-          return answer.answer.length > 0 && answer.answer.some(a => a !== null && a !== undefined && a !== '');
+    // Skip validation if this is a timeout submission
+    if (!isTimeoutSubmission) {
+      const hasValidAnswers = answers.some(answer => {
+        if (answer && answer.answer !== null && answer.answer !== undefined) {
+          if (typeof answer.answer === 'string') {
+            return answer.answer.trim() !== '';
+          } else if (Array.isArray(answer.answer)) {
+            return answer.answer.length > 0 && answer.answer.some(a => a !== null && a !== undefined && a !== '');
+          }
+          return true; // For other types (boolean, number, etc.)
         }
-        return true; // For other types (boolean, number, etc.)
+        return false;
+      });
+      
+      if (!hasValidAnswers) {
+        return res.status(400).json({ error: 'You must answer at least one question before submitting.' });
       }
-      return false;
-    });
-    
-    if (!hasValidAnswers) {
-      return res.status(400).json({ error: 'You must answer at least one question before submitting.' });
     }
     
     let score = 0;

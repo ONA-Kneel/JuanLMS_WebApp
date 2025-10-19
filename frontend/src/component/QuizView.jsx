@@ -381,11 +381,11 @@ export default function QuizView() {
     // Record time for last question
     recordLastQuestionTime();
     // Auto-submit regardless of required questions
-    await submitQuiz();
+    await submitQuiz(true); // Pass true to indicate this is a timeout submission
   };
 
   // Common submission logic
-  const submitQuiz = async () => {
+  const submitQuiz = async (isTimeoutSubmission = false) => {
     setSubmitting(true);
     const token = localStorage.getItem('token');
     try {
@@ -399,7 +399,8 @@ export default function QuizView() {
           answers: quiz.questions.map((q, i) => ({ questionId: q._id || i, answer: answers[i] !== null && answers[i] !== undefined ? answers[i] : "" })),
           violationCount: violationCountRef.current,
           violationEvents,
-          questionTimes
+          questionTimes,
+          isTimeoutSubmission
         })
       });
       if (!res.ok) {
