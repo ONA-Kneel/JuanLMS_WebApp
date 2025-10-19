@@ -523,7 +523,7 @@ router.post('/:quizId/submit', authenticateToken, async (req, res) => {
       if (correct) score += q.points || 1;
       checkedAnswers.push({ correct, studentAnswer, correctAnswer: q.correctAnswers || q.correctAnswer });
     });
-    const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers, violationCount, violationEvents, questionTimes });
+    const response = new QuizResponse({ quizId, studentId, answers, score, checkedAnswers, violationCount, violationEvents, questionTimes, graded: true });
     await response.save();
     
     // Emit real-time quiz completion event
@@ -710,6 +710,57 @@ router.get('/:quizId/debug', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Fix pending quiz scores - mark all responses with scores as graded
+router.patch('/fix-pending-scores', authenticateToken, async (req, res) => {
+  try {
+    // Only allow faculty/admin to run this
+    if (req.user.role !== 'faculty' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    // Find all quiz responses that have a score but are not marked as graded
+    const pendingResponses = await QuizResponse.find({
+      score: { $exists: true, $ne: null },
+      graded: { $ne: true }
+    });
+    
+    console.log(`Found ${pendingResponses.length} quiz responses with scores that are not marked as graded`);
+    
+    if (pendingResponses.length > 0) {
+      // Update all these responses to mark them as graded
+      const result = await QuizResponse.updateMany(
+        {
+          score: { $exists: true, $ne: null },
+          graded: { $ne: true }
+        },
+        {
+          $set: { 
+            graded: true,
+            updatedAt: new Date()
+          }
+        }
+      );
+      
+      console.log(`Successfully updated ${result.modifiedCount} quiz responses to marked as graded`);
+      
+      res.json({
+        success: true,
+        message: `Updated ${result.modifiedCount} quiz responses to marked as graded`,
+        modifiedCount: result.modifiedCount
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'No pending quiz responses found to update',
+        modifiedCount: 0
+      });
+    }
+  } catch (err) {
+    console.error('Error fixing pending quiz scores:', err);
+    res.status(500).json({ error: 'Failed to fix pending quiz scores' });
   }
 });
 

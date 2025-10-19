@@ -107,8 +107,9 @@ export default function Student_Activities() {
       try {
         const token = localStorage.getItem('token');
         const decodedToken = JSON.parse(atob(token.split('.')[1]));
-        const userId = decodedToken.userID; // Student ID like S441
-        const userObjectId = decodedToken.id; // MongoDB ObjectId
+        console.log('Full decoded token:', decodedToken);
+        const userId = decodedToken.userID || decodedToken._id; // Student ID like S441, fallback to _id
+        const userObjectId = decodedToken.id || decodedToken._id; // MongoDB ObjectId
         console.log('Fetching activities for student:', userId);
         console.log('User ObjectId:', userObjectId);
         
@@ -309,12 +310,23 @@ export default function Student_Activities() {
               if (Array.isArray(responseData)) {
                 // Find responses by this student - handle both ObjectId and userID
                 const studentResponses = responseData.filter(resp => {
-                  const studentId = resp.student?._id || resp.student || resp.student?.userID;
+                  // Check multiple possible student ID fields
+                  const studentId = resp.studentId?._id || resp.studentId || resp.student?._id || resp.student || resp.student?.userID;
                   if (!studentId) return false;
                   
                   const studentIdStr = String(studentId);
                   const userIdStr = String(userId);
                   const userObjectIdStr = String(userObjectId);
+                  
+                  console.log(`Filtering quiz response for quiz ${quiz._id}:`, {
+                    studentId,
+                    userId,
+                    userObjectId,
+                    match: studentIdStr === userIdStr || 
+                           studentIdStr === userObjectIdStr ||
+                           studentId === userId ||
+                           studentId === userObjectId
+                  });
                   
                   return studentIdStr === userIdStr || 
                          studentIdStr === userObjectIdStr ||
@@ -341,6 +353,11 @@ export default function Student_Activities() {
           quizResponses: allQuizResponses.length
         });
         
+        // Debug: Log quiz responses details
+        console.log('Quiz responses details:', allQuizResponses);
+        console.log('Quiz IDs:', allQuizzes.map(q => q._id));
+        console.log('Quiz response quiz IDs:', allQuizResponses.map(r => r.quizId || r.quiz));
+        
       } catch (err) {
         console.error('Failed to fetch activities:', err);
         setError(err.message);
@@ -365,8 +382,8 @@ export default function Student_Activities() {
       if (!token) return;
       
       const decodedToken = JSON.parse(atob(token.split('.')[1]));
-      const currentUserId = decodedToken.userID;
-      const currentUserObjectId = decodedToken.id;
+      const currentUserId = decodedToken.userID || decodedToken._id;
+      const currentUserObjectId = decodedToken.id || decodedToken._id;
       
       // Check if this completion is for the current student
       const isCurrentStudent = data.studentId === currentUserId || 
@@ -385,8 +402,8 @@ export default function Student_Activities() {
             try {
               const token = localStorage.getItem('token');
               const decodedToken = JSON.parse(atob(token.split('.')[1]));
-              const userId = decodedToken.userID;
-              const userObjectId = decodedToken.id;
+              const userId = decodedToken.userID || decodedToken._id;
+              const userObjectId = decodedToken.id || decodedToken._id;
               
               // Fetch student's enrolled classes
               const classesRes = await fetch(`${API_BASE}/classes/my-classes`, {
@@ -499,24 +516,77 @@ export default function Student_Activities() {
                 }
               }
               
-              // Fetch submissions and quiz responses
-              const submissionsRes = await fetch(`${API_BASE}/submissions?studentId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
+              // Fetch submissions and quiz responses using the same method as main fetchActivities
+              let allSubmissions = [];
+              let allQuizResponses = [];
               
-              if (submissionsRes.ok) {
-                const submissions = await submissionsRes.json();
-                setSubmissions(submissions);
+              // Fetch submissions for assignments
+              for (const assignment of allAssignments) {
+                try {
+                  const submissionRes = await fetch(`${API_BASE}/assignments/${assignment._id}/submissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (submissionRes.ok) {
+                    const submissionData = await submissionRes.json();
+                    if (Array.isArray(submissionData)) {
+                      // Find submissions by this student - handle both ObjectId and userID
+                      const studentSubmissions = submissionData.filter(sub => {
+                        const studentId = sub.student?._id || sub.student || sub.student?.userID;
+                        if (!studentId) return false;
+                        
+                        const studentIdStr = String(studentId);
+                        const userIdStr = String(userId);
+                        const userObjectIdStr = String(userObjectId);
+                        
+                        return studentIdStr === userIdStr || 
+                               studentIdStr === userObjectIdStr ||
+                               studentId === userId ||
+                               studentId === userObjectId;
+                      });
+                      allSubmissions.push(...studentSubmissions);
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`Failed to fetch submissions for assignment ${assignment._id}:`, err);
+                }
               }
               
-              const quizResponsesRes = await fetch(`${API_BASE}/quiz-responses?studentId=${userId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
-              
-              if (quizResponsesRes.ok) {
-                const quizResponses = await quizResponsesRes.json();
-                setQuizResponses(quizResponses);
+              // Fetch quiz responses for each quiz
+              for (const quiz of allQuizzes) {
+                try {
+                  const responseRes = await fetch(`${API_BASE}/api/quizzes/${quiz._id}/responses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  
+                  if (responseRes.ok) {
+                    const responseData = await responseRes.json();
+                    if (Array.isArray(responseData)) {
+                      // Find responses by this student - handle both ObjectId and userID
+                      const studentResponses = responseData.filter(resp => {
+                        // Check multiple possible student ID fields
+                        const studentId = resp.studentId?._id || resp.studentId || resp.student?._id || resp.student || resp.student?.userID;
+                        if (!studentId) return false;
+                        
+                        const studentIdStr = String(studentId);
+                        const userIdStr = String(userId);
+                        const userObjectIdStr = String(userObjectId);
+                        
+                        return studentIdStr === userIdStr || 
+                               studentIdStr === userObjectIdStr ||
+                               studentId === userId ||
+                               studentId === userObjectId;
+                      });
+                      allQuizResponses.push(...studentResponses);
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`Failed to fetch responses for quiz ${quiz._id}:`, err);
+                }
               }
+              
+              setSubmissions(allSubmissions);
+              setQuizResponses(allQuizResponses);
               
               setAssignments(allAssignments);
               setQuizzes(allQuizzes);
@@ -613,13 +683,25 @@ export default function Student_Activities() {
         return String(assignmentId) === String(activityId);
       });
     } else if (activity.type === 'quiz') {
-      return quizResponses.some(resp => {
+      const isCompleted = quizResponses.some(resp => {
         const quizId = resp.quiz?._id || resp.quiz || resp.quizId;
         const activityId = activity._id;
+        
+        // Debug logging
+        console.log(`Checking quiz completion for activity ${activity.title} (${activityId}):`, {
+          quizId,
+          activityId,
+          match: String(quizId) === String(activityId),
+          allQuizResponses: quizResponses.length,
+          responseDetails: resp
+        });
         
         // Check if response exists (regardless of grading status)
         return String(quizId) === String(activityId);
       });
+      
+      console.log(`Quiz ${activity.title} completion status:`, isCompleted);
+      return isCompleted;
     }
     return false;
   };
