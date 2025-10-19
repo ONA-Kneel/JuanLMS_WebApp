@@ -18,6 +18,7 @@ import studentIcon from "../../assets/student.png";
 import termDashboardIcon from "../../assets/termdashboard.png"; // Reverted to dashboard.png as per user's last manual change
 import * as XLSX from 'xlsx'; // Add this import for Excel handling
 import DependencyWarningModal from './DependencyWarningModal';
+import ValidationModal from '../../component/ValidationModal';
 
 // Student School ID validation function (xx-xxxxx format)
 const validateStudentSchoolIDFormat = (schoolID) => {
@@ -302,6 +303,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   
   // State for validation results modal
   const [validationModalOpen, setValidationModalOpen] = useState(false);
+  
+  // State for error validation modal
+  const [errorValidationModal, setErrorValidationModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
   const [validationResults, setValidationResults] = useState({
     tracks: { valid: 0, invalid: 0, details: [] },
     strands: { valid: 0, invalid: 0, details: [] },
@@ -311,6 +320,26 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     studentAssignments: { valid: 0, invalid: 0, details: [] }
   });
   const [exportingPDF, setExportingPDF] = useState(false);
+
+  // Helper function to show error validation modal
+  const showErrorValidationModal = (title, message, type = 'error') => {
+    setErrorValidationModal({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
+
+  // Helper function to close error validation modal
+  const closeErrorValidationModal = () => {
+    setErrorValidationModal({
+      isOpen: false,
+      title: '',
+      message: '',
+      type: 'error'
+    });
+  };
 
   const tabs = [
     { id: 'dashboard', label: 'Term Dashboard', icon: termDashboardIcon },
@@ -611,10 +640,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setShowTrackModal(false); // Close modal
       } else {
         const data = await res.json();
-        setTrackError(data.message || 'Failed to add track');
+        const errorMessage = data.message || 'Failed to add track';
+        
+        // Check if it's a duplicate error
+        if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+          showErrorValidationModal(
+            'Track Already Exists',
+            `A track with the name "${trackFormData.trackName}" already exists. Please choose a different name.`,
+            'warning'
+          );
+        } else {
+          showErrorValidationModal('Error Adding Track', errorMessage, 'error');
+        }
       }
     } catch (err) {
-      setTrackError('Error adding track');
+      showErrorValidationModal('Error Adding Track', 'An unexpected error occurred while adding the track.', 'error');
     }
   };
 
@@ -684,10 +724,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setShowTrackModal(false); // Close modal
         } else {
           const data = await res.json();
-          setTrackError(data.message || 'Failed to update track');
+          const errorMessage = data.message || 'Failed to update track';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Track Already Exists',
+              `A track with the name "${trackFormData.trackName}" already exists. Please choose a different name.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Updating Track', errorMessage, 'error');
+          }
         }
       } catch (err) {
-        setTrackError('Error updating track');
+        showErrorValidationModal('Error Updating Track', 'An unexpected error occurred while updating the track.', 'error');
       }
     }
   };
@@ -758,13 +809,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Track and all connected data deleted successfully!');
         } else {
           const data = await deleteRes.json();
-          setTrackError(data.message || 'Failed to delete track');
+          showErrorValidationModal('Error Deleting Track', data.message || 'Failed to delete track', 'error');
         }
       } else {
-        setTrackError('Failed to check track dependencies');
+        showErrorValidationModal('Error Deleting Track', 'Failed to check track dependencies', 'error');
       }
     } catch (err) {
-      setTrackError('Error deleting track');
+      showErrorValidationModal('Error Deleting Track', 'An unexpected error occurred while deleting the track.', 'error');
       console.error('Error in handleDeleteTrack:', err);
     }
   };
@@ -828,10 +879,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setIsStrandModalOpen(false); // Close modal
       } else {
         const data = await res.json();
-        setStrandError(data.message || 'Failed to add strand');
+        const errorMessage = data.message || 'Failed to add strand';
+        
+        // Check if it's a duplicate error
+        if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+          showErrorValidationModal(
+            'Strand Already Exists',
+            `A strand with the name "${strandFormData.strandName}" already exists. Please choose a different name.`,
+            'warning'
+          );
+        } else {
+          showErrorValidationModal('Error Adding Strand', errorMessage, 'error');
+        }
       }
     } catch (err) {
-      setStrandError('Error adding strand');
+      showErrorValidationModal('Error Adding Strand', 'An unexpected error occurred while adding the strand.', 'error');
     }
   };
 
@@ -916,10 +978,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setIsStrandModalOpen(false); // Close modal
         } else {
           const data = await res.json();
-          setStrandError(data.message || 'Failed to update strand');
+          const errorMessage = data.message || 'Failed to update strand';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Strand Already Exists',
+              `A strand with the name "${strandFormData.strandName}" already exists. Please choose a different name.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Updating Strand', errorMessage, 'error');
+          }
         }
       } catch (err) {
-        setStrandError('Error updating strand');
+        showErrorValidationModal('Error Updating Strand', 'An unexpected error occurred while updating the strand.', 'error');
       }
     }
   };
@@ -988,13 +1061,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Strand and all connected data deleted successfully!');
         } else {
           const data = await deleteRes.json();
-          setStrandError(data.message || 'Failed to delete strand');
+          showErrorValidationModal('Error Deleting Strand', data.message || 'Failed to delete strand', 'error');
         }
       } else {
-        setStrandError('Failed to check strand dependencies');
+        showErrorValidationModal('Error Deleting Strand', 'Failed to check strand dependencies', 'error');
       }
     } catch (err) {
-      setStrandError('Error deleting strand');
+      showErrorValidationModal('Error Deleting Strand', 'An unexpected error occurred while deleting the strand.', 'error');
       console.error('Error in handleDeleteStrand:', err);
     }
   };
@@ -1089,10 +1162,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } else {
         const data = await res.json();
         console.error('Section creation failed:', data);
-        setSectionError(data.message || 'Failed to add section');
+        const errorMessage = data.message || 'Failed to add section';
+        
+        // Check if it's a duplicate error
+        if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+          showErrorValidationModal(
+            'Section Already Exists',
+            `A section with the name "${sectionFormData.sectionName}" already exists. Please choose a different name.`,
+            'warning'
+          );
+        } else {
+          showErrorValidationModal('Error Adding Section', errorMessage, 'error');
+        }
       }
     } catch (err) {
-      setSectionError('Error adding section');
+      showErrorValidationModal('Error Adding Section', 'An unexpected error occurred while adding the section.', 'error');
     }
   };
 
@@ -1173,10 +1257,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' }); // Clear form including gradeLevel
         } else {
           const data = await res.json();
-          setSectionError(data.message || 'Failed to update section');
+          const errorMessage = data.message || 'Failed to update section';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Section Already Exists',
+              `A section with the name "${sectionFormData.sectionName}" already exists. Please choose a different name.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Updating Section', errorMessage, 'error');
+          }
         }
       } catch (err) {
-        setSectionError('Error updating section');
+        showErrorValidationModal('Error Updating Section', 'An unexpected error occurred while updating the section.', 'error');
       }
     }
   };
@@ -1241,13 +1336,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           window.alert('Section and all connected data deleted successfully!');
         } else {
           const data = await deleteRes.json();
-          setSectionError(data.message || 'Failed to delete section');
+          showErrorValidationModal('Error Deleting Section', data.message || 'Failed to delete section', 'error');
         }
       } else {
-        setSectionError('Failed to check section dependencies');
+        showErrorValidationModal('Error Deleting Section', 'Failed to check section dependencies', 'error');
       }
     } catch (err) {
-      setSectionError('Error deleting section');
+      showErrorValidationModal('Error Deleting Section', 'An unexpected error occurred while deleting the section.', 'error');
       console.error('Error in handleDeleteSection:', err);
     }
   };
@@ -1799,11 +1894,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         if (data.conflict) {
           setFacultyError(`Subject "${data.conflict.subjectName}" in Section "${data.conflict.sectionName}" is already assigned to ${data.conflict.facultyName}`);
         } else {
-          setFacultyError(data.message || 'Failed to assign faculty');
+          const errorMessage = data.message || 'Failed to assign faculty';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Faculty Assignment Already Exists',
+              `This faculty assignment already exists. Please choose a different combination.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Assigning Faculty', errorMessage, 'error');
+          }
         }
       }
     } catch (err) {
-      setFacultyError('Error assigning faculty');
+      showErrorValidationModal('Error Assigning Faculty', 'An unexpected error occurred while assigning faculty.', 'error');
       console.error("Error in handleAddFacultyAssignment:", err);
     }
   };
@@ -1915,10 +2021,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setFacultySearchTerm(''); // Clear search term
         } else {
           const data = await res.json();
-          setFacultyError(data.message || 'Failed to update faculty assignment');
+          const errorMessage = data.message || 'Failed to update faculty assignment';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Faculty Assignment Already Exists',
+              `This faculty assignment already exists. Please choose a different combination.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Updating Faculty Assignment', errorMessage, 'error');
+          }
         }
       } catch (err) {
-        setFacultyError('Error updating faculty assignment');
+        showErrorValidationModal('Error Updating Faculty Assignment', 'An unexpected error occurred while updating the faculty assignment.', 'error');
         console.error("Error in handleUpdateFacultyAssignment:", err);
       }
     }
@@ -1958,10 +2075,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           fetchFacultyAssignments(); // Refresh assignments list
         } else {
           const data = await res.json();
-          setFacultyError(data.message || 'Failed to remove faculty assignment');
+          showErrorValidationModal('Error Removing Faculty Assignment', data.message || 'Failed to remove faculty assignment', 'error');
         }
       } catch (err) {
-        setFacultyError('Error removing faculty assignment');
+        showErrorValidationModal('Error Removing Faculty Assignment', 'An unexpected error occurred while removing the faculty assignment.', 'error');
         console.error("Error in handleDeleteFacultyAssignment:", err);
       }
     }
@@ -2137,11 +2254,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else if (data.message && data.message.includes('already exists')) {
           setStudentError(`Student assignment already exists. Please check existing assignments.`);
         } else {
-          setStudentError(data.message || 'Failed to assign student');
+          const errorMessage = data.message || 'Failed to assign student';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Student Assignment Already Exists',
+              `This student assignment already exists. Please choose a different combination.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Assigning Student', errorMessage, 'error');
+          }
         }
       }
     } catch (err) {
-      setStudentError('Error assigning student');
+      showErrorValidationModal('Error Assigning Student', 'An unexpected error occurred while assigning student.', 'error');
       console.error("Error in handleAddStudentAssignment:", err);
     }
   };
@@ -2245,10 +2373,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setAvailableSubjects([]);
         } else {
           const data = await res.json();
-          setStudentError(data.message || 'Failed to update student assignment');
+          const errorMessage = data.message || 'Failed to update student assignment';
+          
+          // Check if it's a duplicate error
+          if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+            showErrorValidationModal(
+              'Student Assignment Already Exists',
+              `This student assignment already exists. Please choose a different combination.`,
+              'warning'
+            );
+          } else {
+            showErrorValidationModal('Error Updating Student Assignment', errorMessage, 'error');
+          }
         }
       } catch (err) {
-        setStudentError('Error updating student assignment');
+        showErrorValidationModal('Error Updating Student Assignment', 'An unexpected error occurred while updating the student assignment.', 'error');
         console.error("Error in handleUpdateStudentAssignment:", err);
       }
     }
@@ -2288,10 +2427,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           fetchStudentAssignments();
         } else {
           const data = await res.json();
-          setStudentError(data.message || 'Failed to remove student assignment');
+          showErrorValidationModal('Error Removing Student Assignment', data.message || 'Failed to remove student assignment', 'error');
         }
       } catch (err) {
-        setStudentError('Error removing student assignment');
+        showErrorValidationModal('Error Removing Student Assignment', 'An unexpected error occurred while removing the student assignment.', 'error');
         console.error("Error in handleDeleteStudentAssignment:", err);
       }
     }
@@ -5227,10 +5366,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           termName: termDetails.termName,
           quarterName: quarterData ? quarterData.quarterName : undefined
         });
-        setSubjectError(data.message || 'Failed to add subject');
+        const errorMessage = data.message || 'Failed to add subject';
+        
+        // Check if it's a duplicate error
+        if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+          showErrorValidationModal(
+            'Subject Already Exists',
+            `A subject with the name "${subjectFormData.subjectName}" already exists. Please choose a different name.`,
+            'warning'
+          );
+        } else {
+          showErrorValidationModal('Error Adding Subject', errorMessage, 'error');
+        }
       }
     } catch (err) {
-      setSubjectError('Error adding subject');
+      showErrorValidationModal('Error Adding Subject', 'An unexpected error occurred while adding the subject.', 'error');
     }
   };
   const handleEditSubject = (subject) => {
@@ -5295,10 +5445,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         window.alert('Subject updated successfully!');
       } else {
         const data = await res.json();
-        setSubjectError(data.message || 'Failed to update subject');
+        const errorMessage = data.message || 'Failed to update subject';
+        
+        // Check if it's a duplicate error
+        if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('already exists')) {
+          showErrorValidationModal(
+            'Subject Already Exists',
+            `A subject with the name "${subjectFormData.subjectName}" already exists. Please choose a different name.`,
+            'warning'
+          );
+        } else {
+          showErrorValidationModal('Error Updating Subject', errorMessage, 'error');
+        }
       }
     } catch (err) {
-      setSubjectError('Error updating subject');
+      showErrorValidationModal('Error Updating Subject', 'An unexpected error occurred while updating the subject.', 'error');
     }
   };
 
@@ -5372,10 +5533,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setSubjectError(data.message || 'Failed to delete subject');
         }
       } else {
-        setSubjectError('Failed to check subject dependencies');
+        showErrorValidationModal('Error Deleting Subject', 'Failed to check subject dependencies', 'error');
       }
     } catch (err) {
-      setSubjectError('Error deleting subject');
+      showErrorValidationModal('Error Deleting Subject', 'An unexpected error occurred while deleting the subject.', 'error');
       console.error('Error in handleDeleteSubject:', err);
     }
   };
@@ -10283,6 +10444,14 @@ Validation issues (${skippedCount} items):
           </div>
         </div>
       )}
+
+      <ValidationModal
+  isOpen={errorValidationModal.isOpen}
+  onClose={closeErrorValidationModal}
+  title={errorValidationModal.title}
+  message={errorValidationModal.message}
+  type={errorValidationModal.type}
+/>
     </div>
   );
 }
