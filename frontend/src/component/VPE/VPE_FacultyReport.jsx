@@ -2181,18 +2181,7 @@ export default function VPE_FacultyReport() {
             </div>
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              {aiAnalysis ? (() => {
-                const variants = [
-                  'Faculty Performance & Activity Levels Analysis',
-                  'Faculty Performance & Activity Levels',
-                  'Faculty Performance and Activity Levels'
-                ];
-                let idx = -1; let used = '';
-                for (const v of variants) { const i = aiAnalysis.indexOf(v); if (i !== -1) { idx = i; used = v; break; } }
-                const headEnd = idx === -1 ? -1 : idx + used.length;
-                const before = idx === -1 ? aiAnalysis : aiAnalysis.slice(0, headEnd);
-                const after = idx === -1 ? '' : aiAnalysis.slice(headEnd);
-                return (
+              {aiAnalysis ? (
                 <div className="prose max-w-none">
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg mb-6 border-l-4 border-blue-500">
                     <h4 className="text-lg font-semibold text-blue-800 mb-2">Analysis Summary</h4>
@@ -2201,32 +2190,31 @@ export default function VPE_FacultyReport() {
                       and recommendations for improving academic outcomes.
                     </p>
                   </div>
-                  <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(before) }} />
-                  {idx !== -1 && (
-                    <div className="flex flex-col gap-6 py-3">
-                      <div className="flex items-center justify-center">
-                        <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                  
+                  {/* Always show charts for every analysis */}
+                  <div className="flex flex-col gap-6 py-3 mb-6">
+                    <div className="flex items-center justify-center">
+                      <canvas ref={chartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className="text-sm font-medium mb-2">By Section</div>
+                        <canvas ref={sectionChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="flex flex-col items-center">
-                          <div className="text-sm font-medium mb-2">By Section</div>
-                          <canvas ref={sectionChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <div className="text-sm font-medium mb-2">By Track</div>
-                          <canvas ref={trackChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
-                        </div>
-                        <div className="flex flex-col items-center">
-                          <div className="text-sm font-medium mb-2">By Strand</div>
-                          <canvas ref={strandChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
-                        </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-sm font-medium mb-2">By Track</div>
+                        <canvas ref={trackChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <div className="text-sm font-medium mb-2">By Strand</div>
+                        <canvas ref={strandChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
                       </div>
                     </div>
-                  )}
-                  <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(after) }} />
+                  </div>
+                  
+                  <div className="text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatAnalysisToHtml(aiAnalysis) }} />
                 </div>
-                );
-              })() : (
+              ) : (
                 <div className="text-center py-8">
                   <div className="text-red-600">No analysis data available</div>
                 </div>
