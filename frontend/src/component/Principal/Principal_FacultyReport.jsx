@@ -232,8 +232,8 @@ const downloadAsPDF = async (content, filename, chartData) => {
           let processedBefore = convertMarkdownToHtml(before);
           let processedAfter = convertMarkdownToHtml(after);
           
-          // Insert Activity Distribution Charts after Executive Summary (position 1)
-          const activityChartsHTML = `
+         // Insert Activity Distribution Charts after Executive Summary (position 1)
+         const activityChartsHTML = \`
             <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">
               <div style="font-weight: bold; font-size: 16px; margin-bottom: 16px; text-align: center;">Activity Distribution Charts</div>
               <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
@@ -250,22 +250,22 @@ const downloadAsPDF = async (content, filename, chartData) => {
                   <canvas id="strandChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
                 </div>
               </div>
-            </div>
-          `;
+           </div>
+         \`;
           
-          // Insert Risk Assessment Chart at position 6 (after section scope analysis)
-          const riskChartHTML = `
+         // Insert Risk Assessment Chart at position 6 (after section scope analysis)
+         const riskChartHTML = \`
             <div style="margin: 20px 0; padding: 16px; background: linear-gradient(to right, #fef2f2, #fff7ed); border-left: 4px solid #ef4444; border-radius: 8px;">
               <div style="font-size: 18px; font-weight: bold; color: #dc2626; margin-bottom: 16px;">Risk Assessment & Next Steps</div>
               <div style="display: flex; justify-content: center;">
                 <canvas id="risksChart" width="400" height="200" style="max-width:400px; max-height:200px;"></canvas>
               </div>
-            </div>
-          `;
+           </div>
+         \`;
           
           // Insert charts at appropriate positions
-          processedBefore = processedBefore.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + activityChartsHTML);
-          processedAfter = processedAfter.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + riskChartHTML);
+         processedBefore = processedBefore.replace(new RegExp('(<h[1-6][^>]*>.*?</h[1-6]>)', 'i'), '$1' + activityChartsHTML);
+         processedAfter = processedAfter.replace(new RegExp('(<h[1-6][^>]*>.*?</h[1-6]>)', 'i'), '$1' + riskChartHTML);
           
           beforeEl.innerHTML = processedBefore;
           afterEl.innerHTML = processedAfter;
