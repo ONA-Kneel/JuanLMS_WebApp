@@ -5,6 +5,7 @@ import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
 import Student_Navbar from "./Student_Navbar";
 import { getFileUrl } from "../../utils/imageUtils";
+import DEFAULT_IMAGE_URL from "../../assets/logo/Logo5.svg"; 
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -177,7 +178,7 @@ export default function Student_Classes() {
                 onClick={() => navigate(`/student_class/${cls.classID || cls._id}`)}
               >
                 {/* Image section */}
-                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px' }}>
+                <div className="flex items-center justify-center bg-gradient-to-r from-blue-900 to-blue-950" style={{ height: '160px' }}>
                   {cls.image ? (
                     <img
                       src={getFileUrl(cls.image, API_BASE)}
@@ -185,7 +186,7 @@ export default function Student_Classes() {
                       className="object-cover w-full h-full"
                     />
                   ) : (
-                    <span className="text-white text-xl font-bold">image</span>
+                    <span className="text-white text-xl font-bold justify-center align-middle items-center flex"><img src={DEFAULT_IMAGE_URL} alt="Class" className="w-[50%] h-full " /></span>
                   )}
                 </div>
                 {/* Info section */}
