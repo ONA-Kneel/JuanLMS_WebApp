@@ -390,6 +390,20 @@ const downloadAsPDF = async (content, filename, chartData) => {
           // After layout and charts are ready, generate and download the PDF automatically
           const doDownload = () => {
             if (!window.html2pdf) { setTimeout(doDownload, 200); return; }
+            
+            // Verify all charts are rendered before proceeding
+            const charts = document.querySelectorAll('canvas');
+            const allChartsReady = Array.from(charts).every(canvas => {
+              const ctx = canvas.getContext('2d');
+              return ctx && canvas.width > 0 && canvas.height > 0;
+            });
+            
+            if (!allChartsReady) {
+              console.log('Charts not ready, retrying...');
+              setTimeout(doDownload, 500);
+              return;
+            }
+            
             const safeName = encodeURIComponent(${JSON.stringify(filename)});
             const opt = {
               margin: 0.5,
@@ -399,9 +413,20 @@ const downloadAsPDF = async (content, filename, chartData) => {
                 scale: 2, 
                 useCORS: true, 
                 allowTaint: true,
-                backgroundColor: '#ffffff',
+                backgroundColor: null, // Remove white background to capture charts properly
                 logging: false,
-                letterRendering: true
+                letterRendering: true,
+                foreignObjectRendering: true, // Enable foreign object rendering for charts
+                removeContainer: true,
+                imageTimeout: 0, // Disable timeout for chart rendering
+                onclone: function(clonedDoc) {
+                  // Ensure charts are visible in cloned document
+                  const canvases = clonedDoc.querySelectorAll('canvas');
+                  canvases.forEach(canvas => {
+                    canvas.style.display = 'block';
+                    canvas.style.visibility = 'visible';
+                  });
+                }
               },
               jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
             };
@@ -414,7 +439,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
             });
           };
           // Give charts more time to render before capturing
-          setTimeout(doDownload, 1000);
+          setTimeout(doDownload, 2000);
         })();
       </script>
     </body>
