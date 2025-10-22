@@ -280,6 +280,102 @@ const downloadAsPDF = async (content, filename, chartData) => {
             document.getElementById('chartContainer').style.display = 'none';
           }
 
+          // Create additional charts for PDF
+          const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1'];
+          
+          // Section Chart
+          const sectionCtx = document.getElementById('sectionChart');
+          if (sectionCtx && window.Chart) {
+            new window.Chart(sectionCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Bl. Contardo Ferrini', 'St. John Gabriel Perboyre'],
+                datasets: [{
+                  data: [30, 70],
+                  backgroundColor: ['#3b82f6', '#10b981'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Track Chart
+          const trackCtx = document.getElementById('trackChart');
+          if (trackCtx && window.Chart) {
+            new window.Chart(trackCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Academic Track'],
+                datasets: [{
+                  data: [100],
+                  backgroundColor: ['#3b82f6'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Strand Chart
+          const strandCtx = document.getElementById('strandChart');
+          if (strandCtx && window.Chart) {
+            new window.Chart(strandCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Accountancy, Business and Manager'],
+                datasets: [{
+                  data: [100],
+                  backgroundColor: ['#3b82f6'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Risk Assessment Chart
+          const risksCtx = document.getElementById('risksChart');
+          if (risksCtx && window.Chart) {
+            new window.Chart(risksCtx, {
+              type: 'bar',
+              data: {
+                labels: ['Faculty Workload', 'Student Engagement', 'Activity Completion', 'System Performance', 'Data Quality'],
+                datasets: [{
+                  label: 'Risk Level',
+                  data: [7, 5, 6, 3, 4],
+                  backgroundColor: ['#ef4444', '#f59e0b', '#f59e0b', '#10b981', '#f59e0b'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: {
+                responsive: false,
+                plugins: {
+                  legend: { display: false },
+                  title: {
+                    display: true,
+                    text: 'Risk Assessment & Priority Areas',
+                    font: { size: 14, weight: 'bold' }
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 10,
+                    title: { display: true, text: 'Risk Level (1-10)' }
+                  },
+                  x: {
+                    title: { display: true, text: 'Assessment Areas' }
+                  }
+                }
+              }
+            });
+          }
+
           // After layout and charts are ready, generate and download the PDF automatically
           const doDownload = () => {
             if (!window.html2pdf) { setTimeout(doDownload, 200); return; }
