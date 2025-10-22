@@ -265,6 +265,16 @@ const downloadAsPDF = async (content, filename, chartData) => {
           
           document.getElementById('contentBefore').innerHTML = processedBefore;
           document.getElementById('contentAfter').innerHTML = processedAfter;
+          
+          // Ensure content is visible
+          document.getElementById('contentBefore').style.display = 'block';
+          document.getElementById('contentAfter').style.display = 'block';
+          
+          // Fallback: if content is empty, show the original content
+          if (!processedBefore.trim() && !processedAfter.trim()) {
+            beforeEl.innerHTML = convertMarkdownToHtml(before);
+            afterEl.innerHTML = convertMarkdownToHtml(after);
+          }
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
@@ -410,7 +420,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
             });
           };
           // Give charts more time to render before capturing
-          setTimeout(doDownload, 1000);
+          setTimeout(doDownload, 2000);
         })();
       </script>
     </body>
