@@ -410,6 +410,7 @@ io.on("connection", (socket) => {
 const allowedOrigins = [
   'https://sjdefilms.com',
   'https://www.sjdefilms.com',
+  'https://juan-lms.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
