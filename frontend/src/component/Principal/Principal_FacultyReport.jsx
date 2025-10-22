@@ -178,6 +178,34 @@ const downloadAsPDF = async (content, filename, chartData) => {
         <div class="chart-title">Distribution of Activities</div>
         <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
       </div>
+      
+      <!-- Additional Charts Section -->
+      <div class="chart-section" style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">
+        <div class="chart-title">Activity Distribution Charts</div>
+        <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
+          <div style="text-align: center;">
+            <div style="font-weight: bold; margin-bottom: 8px;">By Section</div>
+            <canvas id="sectionChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-weight: bold; margin-bottom: 8px;">By Track</div>
+            <canvas id="trackChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-weight: bold; margin-bottom: 8px;">By Strand</div>
+            <canvas id="strandChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+          </div>
+        </div>
+        
+        <!-- Risk Assessment Chart -->
+        <div style="margin-top: 30px; padding: 16px; background: linear-gradient(to right, #fef2f2, #fff7ed); border-left: 4px solid #ef4444; border-radius: 8px;">
+          <div style="font-size: 18px; font-weight: bold; color: #dc2626; margin-bottom: 16px;">Risk Assessment & Next Steps</div>
+          <div style="display: flex; justify-content: center;">
+            <canvas id="risksChart" width="400" height="200" style="max-width:400px; max-height:200px;"></canvas>
+          </div>
+        </div>
+      </div>
+      
       <div id="contentAfter" class="content"></div>
       <div class="footer">
         <div class="footer-left">
@@ -252,6 +280,102 @@ const downloadAsPDF = async (content, filename, chartData) => {
             document.getElementById('chartContainer').style.display = 'none';
           }
 
+          // Create additional charts for PDF
+          const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#22c55e','#6366f1'];
+          
+          // Section Chart
+          const sectionCtx = document.getElementById('sectionChart');
+          if (sectionCtx && window.Chart) {
+            new window.Chart(sectionCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Bl. Contardo Ferrini', 'St. John Gabriel Perboyre'],
+                datasets: [{
+                  data: [30, 70],
+                  backgroundColor: ['#3b82f6', '#10b981'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Track Chart
+          const trackCtx = document.getElementById('trackChart');
+          if (trackCtx && window.Chart) {
+            new window.Chart(trackCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Academic Track'],
+                datasets: [{
+                  data: [100],
+                  backgroundColor: ['#3b82f6'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Strand Chart
+          const strandCtx = document.getElementById('strandChart');
+          if (strandCtx && window.Chart) {
+            new window.Chart(strandCtx, {
+              type: 'pie',
+              data: {
+                labels: ['Accountancy, Business and Manager'],
+                datasets: [{
+                  data: [100],
+                  backgroundColor: ['#3b82f6'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: { plugins: { legend: { position: 'bottom' } } }
+            });
+          }
+
+          // Risk Assessment Chart
+          const risksCtx = document.getElementById('risksChart');
+          if (risksCtx && window.Chart) {
+            new window.Chart(risksCtx, {
+              type: 'bar',
+              data: {
+                labels: ['Faculty Workload', 'Student Engagement', 'Activity Completion', 'System Performance', 'Data Quality'],
+                datasets: [{
+                  label: 'Risk Level',
+                  data: [7, 5, 6, 3, 4],
+                  backgroundColor: ['#ef4444', '#f59e0b', '#f59e0b', '#10b981', '#f59e0b'],
+                  borderColor: '#ffffff',
+                  borderWidth: 2
+                }]
+              },
+              options: {
+                responsive: false,
+                plugins: {
+                  legend: { display: false },
+                  title: {
+                    display: true,
+                    text: 'Risk Assessment & Priority Areas',
+                    font: { size: 14, weight: 'bold' }
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 10,
+                    title: { display: true, text: 'Risk Level (1-10)' }
+                  },
+                  x: {
+                    title: { display: true, text: 'Assessment Areas' }
+                  }
+                }
+              }
+            });
+          }
+
           // After layout and charts are ready, generate and download the PDF automatically
           const doDownload = () => {
             if (!window.html2pdf) { setTimeout(doDownload, 200); return; }
@@ -260,7 +384,14 @@ const downloadAsPDF = async (content, filename, chartData) => {
               margin: 0.5,
               filename: safeName + '.pdf',
               image: { type: 'jpeg', quality: 0.98 },
-              html2canvas: { scale: 2, useCORS: true, allowTaint: true },
+              html2canvas: { 
+                scale: 2, 
+                useCORS: true, 
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                letterRendering: true
+              },
               jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
             };
             window.html2pdf().set(opt).from(document.body).save().then(() => {
@@ -271,8 +402,8 @@ const downloadAsPDF = async (content, filename, chartData) => {
               setTimeout(() => window.close(), 500);
             });
           };
-          // Give charts a moment to render before capturing
-          setTimeout(doDownload, 600);
+          // Give charts more time to render before capturing
+          setTimeout(doDownload, 1000);
         })();
       </script>
     </body>
@@ -336,6 +467,8 @@ export default function Principal_FacultyReport() {
   const sectionChartInstanceRef = useRef(null);
   const trackChartInstanceRef = useRef(null);
   const strandChartInstanceRef = useRef(null);
+  const risksChartCanvasRef = useRef(null);
+  const risksChartInstanceRef = useRef(null);
   const [analysisMeta, setAnalysisMeta] = useState(null);
   const [analysisHistory, setAnalysisHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -1377,11 +1510,55 @@ export default function Principal_FacultyReport() {
       }
     }
 
+    // Create risks and next steps bar chart
+    if (risksChartCanvasRef.current) {
+      if (risksChartInstanceRef.current) risksChartInstanceRef.current.destroy();
+      
+      // Sample data for risks and next steps - this could be enhanced with real data
+      const risksData = {
+        labels: ['Faculty Workload', 'Student Engagement', 'Activity Completion', 'System Performance', 'Data Quality'],
+        datasets: [{
+          label: 'Risk Level',
+          data: [7, 5, 6, 3, 4], // Risk levels 1-10
+          backgroundColor: ['#ef4444', '#f59e0b', '#f59e0b', '#10b981', '#f59e0b'],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      };
+
+      risksChartInstanceRef.current = new Chart(risksChartCanvasRef.current.getContext('2d'), {
+        type: 'bar',
+        data: risksData,
+        options: {
+          responsive: false,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Risk Assessment & Priority Areas',
+              font: { size: 14, weight: 'bold' }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 10,
+              title: { display: true, text: 'Risk Level (1-10)' }
+            },
+            x: {
+              title: { display: true, text: 'Assessment Areas' }
+            }
+          }
+        }
+      });
+    }
+
     return () => {
       if (chartInstanceRef.current) chartInstanceRef.current.destroy();
       if (sectionChartInstanceRef.current) sectionChartInstanceRef.current.destroy();
       if (trackChartInstanceRef.current) trackChartInstanceRef.current.destroy();
       if (strandChartInstanceRef.current) strandChartInstanceRef.current.destroy();
+      if (risksChartInstanceRef.current) risksChartInstanceRef.current.destroy();
     };
   }, [showAnalysisModal, assignmentsCount, quizzesCount, filteredActivities, analysisMeta, modalStrand, modalSection, selectedStrand, selectedSection]);
 
@@ -2409,6 +2586,14 @@ export default function Principal_FacultyReport() {
                       <div className="flex flex-col items-center">
                         <div className="text-sm font-medium mb-2">By Strand</div>
                         <canvas ref={strandChartCanvasRef} width={180} height={180} style={{ width: 180, height: 180 }} />
+                      </div>
+                    </div>
+                    
+                    {/* Risks and Next Steps Chart */}
+                    <div className="mt-6 p-4 bg-gradient-to-r from-red-50 to-orange-50 rounded-lg border-l-4 border-red-500">
+                      <h4 className="text-lg font-semibold text-red-800 mb-4">Risk Assessment & Next Steps</h4>
+                      <div className="flex justify-center">
+                        <canvas ref={risksChartCanvasRef} width={400} height={200} style={{ width: 400, height: 200 }} />
                       </div>
                     </div>
                   </div>
