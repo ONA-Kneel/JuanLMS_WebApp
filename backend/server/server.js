@@ -63,8 +63,8 @@ app.use(helmet({
     includeSubDomains: true,
     preload: true
   } : false,
-  // Permissions-Policy header
-  permissionsPolicy: {
+  // Permissions-Policy header - More permissive for development
+  permissionsPolicy: process.env.NODE_ENV === 'production' ? {
     camera: ["self"],
     microphone: ["self"],
     geolocation: [],
@@ -78,6 +78,48 @@ app.use(helmet({
     clipboardWrite: [],
     deviceMemory: [],
     displayCapture: ["self"],
+    documentDomain: [],
+    encryptedMedia: [],
+    executionWhileNotRendered: [],
+    executionWhileOutOfViewport: [],
+    fullscreen: [],
+    gamepad: [],
+    gyroscope: [],
+    keyboardMap: [],
+    magnetometer: [],
+    midi: [],
+    navigationOverride: [],
+    payment: [],
+    pictureInPicture: [],
+    publickeyCredentialsGet: [],
+    screenWakeLock: [],
+    serial: [],
+    speakerSelection: [],
+    storageAccess: [],
+    syncXhr: [],
+    unoptimizedImages: [],
+    unsizedMedia: [],
+    usb: [],
+    verticalScroll: [],
+    vibrate: [],
+    wakeLock: [],
+    webShare: [],
+    xrSpatialTracking: []
+  } : {
+    // Development: Allow camera and microphone for localhost and development domains
+    camera: ["self", "http://localhost:*", "https://localhost:*"],
+    microphone: ["self", "http://localhost:*", "https://localhost:*"],
+    displayCapture: ["self", "http://localhost:*", "https://localhost:*"],
+    geolocation: [],
+    interestCohort: [],
+    accelerometer: [],
+    ambientLightSensor: [],
+    autoplay: [],
+    battery: [],
+    bluetooth: [],
+    clipboardRead: [],
+    clipboardWrite: [],
+    deviceMemory: [],
     documentDomain: [],
     encryptedMedia: [],
     executionWhileNotRendered: [],
@@ -139,7 +181,7 @@ app.use((req, res, next) => {
   }
   
   // Set Permissions-Policy header
-  const permissionsPolicy = [
+  const permissionsPolicy = process.env.NODE_ENV === 'production' ? [
     'camera=(self)',
     'microphone=(self)',
     'geolocation=()',
@@ -180,9 +222,51 @@ app.use((req, res, next) => {
     'wake-lock=()',
     'web-share=()',
     'xr-spatial-tracking=()'
-  ].join(', ');
+  ] : [
+    // Development: Allow camera and microphone for localhost
+    'camera=(self "http://localhost:*" "https://localhost:*")',
+    'microphone=(self "http://localhost:*" "https://localhost:*")',
+    'display-capture=(self "http://localhost:*" "https://localhost:*")',
+    'geolocation=()',
+    'interest-cohort=()',
+    'accelerometer=()',
+    'ambient-light-sensor=()',
+    'autoplay=()',
+    'battery=()',
+    'bluetooth=()',
+    'clipboard-read=()',
+    'clipboard-write=()',
+    'device-memory=()',
+    'document-domain=()',
+    'encrypted-media=()',
+    'execution-while-not-rendered=()',
+    'execution-while-out-of-viewport=()',
+    'fullscreen=()',
+    'gamepad=()',
+    'gyroscope=()',
+    'keyboard-map=()',
+    'magnetometer=()',
+    'midi=()',
+    'navigation-override=()',
+    'payment=()',
+    'picture-in-picture=()',
+    'publickey-credentials-get=()',
+    'screen-wake-lock=()',
+    'serial=()',
+    'speaker-selection=()',
+    'storage-access=()',
+    'sync-xhr=()',
+    'unoptimized-images=()',
+    'unsized-media=()',
+    'usb=()',
+    'vertical-scroll=()',
+    'vibrate=()',
+    'wake-lock=()',
+    'web-share=()',
+    'xr-spatial-tracking=()'
+  ];
   
-  res.setHeader('Permissions-Policy', permissionsPolicy);
+  res.setHeader('Permissions-Policy', permissionsPolicy.join(', '));
   
   next();
 });

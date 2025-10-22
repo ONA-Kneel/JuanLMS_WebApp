@@ -8,9 +8,11 @@ import {
   CallStatsButton,
   RecordCallButton,
 } from '@stream-io/video-react-sdk';
-import { PhoneOff, MonitorUp, Mic, MicOff, Video as VideoIcon, VideoOff, BarChart3, Circle, CircleStop } from 'lucide-react';
+import { PhoneOff, MonitorUp, Mic, MicOff, Video as VideoIcon, VideoOff, BarChart3, Circle, CircleStop, AlertCircle } from 'lucide-react';
 import '@stream-io/video-react-sdk/dist/css/styles.css';
 import './StreamMeetingRoom.css';
+import PermissionRequestModal from './PermissionRequestModal';
+import { mediaPermissions } from '../../utils/mediaPermissions';
 
 // Stream meeting room wrapper
 // Props:
@@ -42,6 +44,8 @@ const StreamMeetingRoom = ({
   const statsButtonRef = React.useRef(null);
   const recordButtonRef = React.useRef(null);
   const [hostPresent, setHostPresent] = useState(true);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [permissionError, setPermissionError] = useState('');
 
   const apiKey = credentials?.apiKey;
   const userToken = credentials?.token;
@@ -181,6 +185,32 @@ const StreamMeetingRoom = ({
     }
   }, [call, isCameraOn]);
 
+  // Permission handling functions
+  const checkPermissions = useCallback(async () => {
+    await mediaPermissions.checkPermissions();
+    const states = mediaPermissions.getPermissionStates();
+    
+    if (states.camera === 'denied' || states.microphone === 'denied') {
+      setPermissionError('Camera or microphone access was denied. Please enable permissions in your browser settings.');
+      setShowPermissionModal(true);
+      return false;
+    }
+    
+    return true;
+  }, []);
+
+  const handlePermissionsGranted = useCallback(() => {
+    setShowPermissionModal(false);
+    setPermissionError('');
+    // Retry joining the call
+    window.location.reload();
+  }, []);
+
+  const handlePermissionsDenied = useCallback(() => {
+    setShowPermissionModal(false);
+    setError('Cannot join meeting without camera and microphone permissions.');
+  }, []);
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -194,6 +224,13 @@ const StreamMeetingRoom = ({
         setError('Missing callId');
         return;
       }
+
+      // Check permissions before joining
+      const hasPermissions = await checkPermissions();
+      if (!hasPermissions) {
+        return;
+      }
+
       setIsJoining(true);
       setError('');
       try {
@@ -253,7 +290,7 @@ const StreamMeetingRoom = ({
         try { if (client) await client.disconnectUser(); } catch (e) { console.debug('cleanup disconnect error', e); }
       })();
     };
-  }, [apiKey, userToken, userId, resolvedCallId, userInfo, isOpen]);
+  }, [apiKey, userToken, userId, resolvedCallId, userInfo, isOpen, checkPermissions]);
 
   // Watch for host presence for students; show overlay until host joins
   useEffect(() => {
@@ -403,6 +440,14 @@ const StreamMeetingRoom = ({
           </div>
         </div>
       )}
+
+      {/* Permission Request Modal */}
+      <PermissionRequestModal
+        isOpen={showPermissionModal}
+        onClose={() => setShowPermissionModal(false)}
+        onPermissionsGranted={handlePermissionsGranted}
+        onPermissionsDenied={handlePermissionsDenied}
+      />
     </div>
   );
 };
