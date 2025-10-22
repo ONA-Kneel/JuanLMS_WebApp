@@ -173,8 +173,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
         <p class="report-title">${filename}</p>
         <p class="report-date">Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
-      <div id="contentBefore" class="content"></div>
-      <div class="chart-section" id="chartContainer" style="display:none;">
+      <div class="chart-section" id="chartContainer">
         <div class="chart-title">Distribution of Activities</div>
         <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
       </div>
@@ -205,7 +204,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
           </div>
         </div>
       </div>
-      
+      <div id="contentBefore" class="content"></div>
       <div id="contentAfter" class="content"></div>
       <div class="footer">
         <div class="footer-left">
@@ -420,7 +419,9 @@ const downloadAsPDF = async (content, filename, chartData) => {
               jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
             };
             window.html2pdf().set(opt).from(document.body).save().then(() => {
-              window.close();
+              // Also prompt the print dialog after download completes
+              try { window.print(); } catch (e) {}
+              setTimeout(() => window.close(), 500);
             }).catch(() => {
               // Fallback: open print dialog if direct save fails
               window.print();
