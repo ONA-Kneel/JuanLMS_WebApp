@@ -102,6 +102,27 @@ const downloadAsPDF = async (content, filename, chartData) => {
           white-space: pre-wrap; 
           font-size: 14px;
         }
+        .content h1 {
+          font-size: 20px;
+          font-weight: bold;
+          margin: 20px 0 10px 0;
+          color: #1f2937;
+        }
+        .content h2 {
+          font-size: 18px;
+          font-weight: bold;
+          margin: 18px 0 8px 0;
+          color: #374151;
+        }
+        .content h3 {
+          font-size: 16px;
+          font-weight: bold;
+          margin: 16px 0 6px 0;
+          color: #4b5563;
+        }
+        .content strong {
+          font-weight: bold;
+        }
         .footer {
           margin-top: 30px;
           border-top: 1px solid #333;
@@ -171,13 +192,25 @@ const downloadAsPDF = async (content, filename, chartData) => {
       <div class="no-print" style="display:none"></div>
       <script>
         (function(){
-          const encode = (s) => s
-            .replace(/&/g,'&amp;')
-            .replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;')
-            .replace(/"/g,'&quot;')
-            .replace(/'/g,'&#39;');
-          const rawContent = encode(${JSON.stringify(content)});
+          const convertMarkdownToHtml = (text) => {
+            return text
+              // Convert HTML entities back to normal characters
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&#39;/g, "'")
+              // Convert markdown headers to HTML
+              .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+              .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+              .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+              // Convert bold text
+              .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+              // Convert line breaks to HTML
+              .replace(/\\n/g, '<br>');
+          };
+          
+          const rawContent = ${JSON.stringify(content)};
           const keywords = ${JSON.stringify([
             'Faculty Performance & Activity Levels Analysis',
             'Faculty Performance & Activity Levels',
@@ -195,8 +228,8 @@ const downloadAsPDF = async (content, filename, chartData) => {
           }
           const beforeEl = document.getElementById('contentBefore');
           const afterEl = document.getElementById('contentAfter');
-          beforeEl.textContent = before;
-          afterEl.textContent = after;
+          beforeEl.innerHTML = convertMarkdownToHtml(before);
+          afterEl.innerHTML = convertMarkdownToHtml(after);
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
