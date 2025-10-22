@@ -343,19 +343,34 @@ Focus on this section: how students are doing (engagement signals, timeliness), 
     ];
     const modelsToTry = [primaryModel, ...fallbackModels];
 
-    const aiResponseJson = await callOpenRouterWithRetry(modelsToTry, (model) => ({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    }));
+    let analysis;
+    let usedFallback = false;
+    try {
+      const aiResponseJson = await callOpenRouterWithRetry(modelsToTry, (model) => ({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      }));
+      analysis = aiResponseJson.choices?.[0]?.message?.content || "No analysis generated";
+      console.log(`[AI ANALYTICS] Analysis received from DeepSeek AI`);
+    } catch (aiErr) {
+      console.error('[AI ANALYTICS] AI provider failed, using fallback analysis:', aiErr?.message);
+      usedFallback = true;
+      // Build a concise, deterministic fallback analysis so the user still gets a report
+      const totalActivities = analysisData.activitySummary.totalActivities;
+      const aCount = analysisData.activitySummary.assignmentsCount;
+      const qCount = analysisData.activitySummary.quizzesCount;
+      const posted = analysisData.activitySummary.postedActivities;
+      const pending = analysisData.activitySummary.pendingActivities;
 
-    const analysis = aiResponseJson.choices?.[0]?.message?.content || "No analysis generated";
+      const topFaculty = (analysisData.workloadByFaculty || []).slice(0, 5).map((w, i) => `${i+1}. ${w.facultyName} — ${w.totalActivities} activities`).join('\n') || 'No faculty activity found.';
 
-    console.log(`[AI ANALYTICS] Analysis received from DeepSeek AI`);
+      analysis = `1. Executive Summary\nThis automated fallback report summarizes term activity and engagement indicators for leadership review. It was generated without an external AI model due to a temporary service issue.\n\n2. Key Findings (${inferredReportType} scope)\n- Total activities: ${totalActivities} (Assignments: ${aCount}, Quizzes: ${qCount})\n- Posted vs Pending: ${posted} posted, ${pending} pending\n- Program context — Sections: ${analysisData.sections.join(', ') || 'N/A'}; Tracks: ${analysisData.tracks.join(', ') || 'N/A'}; Strands: ${analysisData.strands.join(', ') || 'N/A'}\n\n3. Faculty Workload Snapshot\n${topFaculty}\n\n4. Engagement Signals (from audit logs)\n- Logins: ${analysisData.studentEngagement.loginCount}\n- Logouts: ${analysisData.studentEngagement.logoutCount}\n- Other actions: ${analysisData.studentEngagement.otherActions}\n\n5. Recommendations (Immediate)\n- Balance workload by redistributing upcoming activities across faculty with low recent activity.\n- Focus on pending items to reduce backlog prior to new postings.\n- Review sections/strands with consistently low activity for targeted support.\n\nREPORT PREPARED BY:\n${creatorName}\n${req.user.role === 'principal' ? 'Principal' : req.user.role === 'vice president of education' ? 'Vice President of Education' : 'Administrator'}\nSan Juan de Dios Educational Foundation, Inc.\nDate: ${new Date().toLocaleDateString()}`;
+    }
 
     // Store the analysis in the database for future reference
     const analysisRecord = {
@@ -388,6 +403,7 @@ Focus on this section: how students are doing (engagement signals, timeliness), 
           track: trackFilter,
           strand: strandFilter
         },
+        fallbackUsed: usedFallback,
         timestamp: new Date().toISOString()
       }
     });

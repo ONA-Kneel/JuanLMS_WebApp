@@ -1329,8 +1329,9 @@ export default function Principal_FacultyReport() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create AI analysis");
+        const errorData = await response.json().catch(()=>({}));
+        const msg = [errorData.error, errorData.details].filter(Boolean).join(' - ') || 'Failed to create AI analysis';
+        throw new Error(msg);
       }
 
       const data = await response.json();
