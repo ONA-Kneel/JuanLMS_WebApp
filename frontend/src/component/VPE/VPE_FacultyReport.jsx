@@ -265,8 +265,24 @@ const downloadAsPDF = async (content, filename, chartData) => {
           processedBefore = processedBefore.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + activityChartsHTML);
           processedAfter = processedAfter.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + riskChartHTML);
           
-          document.getElementById('contentBefore').innerHTML = processedBefore;
-          document.getElementById('contentAfter').innerHTML = processedAfter;
+          // Ensure content is properly set
+          document.getElementById('contentBefore').innerHTML = processedBefore || convertMarkdownToHtml(before);
+          document.getElementById('contentAfter').innerHTML = processedAfter || convertMarkdownToHtml(after);
+          
+          // Make sure content is visible
+          document.getElementById('contentBefore').style.display = 'block';
+          document.getElementById('contentAfter').style.display = 'block';
+          
+          // Debug: Log content to console
+          console.log('Content Before:', processedBefore);
+          console.log('Content After:', processedAfter);
+          
+          // Final fallback: if still no content, show raw content
+          if (!document.getElementById('contentBefore').innerHTML.trim() && !document.getElementById('contentAfter').innerHTML.trim()) {
+            document.getElementById('contentBefore').innerHTML = before;
+            document.getElementById('contentAfter').innerHTML = after;
+            console.log('Using raw content as fallback');
+          }
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
@@ -412,7 +428,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
             });
           };
           // Give charts more time to render before capturing
-          setTimeout(doDownload, 1000);
+          setTimeout(doDownload, 3000);
         })();
       </script>
     </body>
