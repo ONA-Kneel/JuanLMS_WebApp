@@ -65,8 +65,8 @@ app.use(helmet({
   } : false,
   // Permissions-Policy header
   permissionsPolicy: {
-    camera: [],
-    microphone: [],
+    camera: ["self"],
+    microphone: ["self"],
     geolocation: [],
     interestCohort: [],
     accelerometer: [],
@@ -77,7 +77,7 @@ app.use(helmet({
     clipboardRead: [],
     clipboardWrite: [],
     deviceMemory: [],
-    displayCapture: [],
+    displayCapture: ["self"],
     documentDomain: [],
     encryptedMedia: [],
     executionWhileNotRendered: [],
@@ -140,8 +140,8 @@ app.use((req, res, next) => {
   
   // Set Permissions-Policy header
   const permissionsPolicy = [
-    'camera=()',
-    'microphone=()',
+    'camera=(self)',
+    'microphone=(self)',
     'geolocation=()',
     'interest-cohort=()',
     'accelerometer=()',
@@ -152,7 +152,7 @@ app.use((req, res, next) => {
     'clipboard-read=()',
     'clipboard-write=()',
     'device-memory=()',
-    'display-capture=()',
+    'display-capture=(self)',
     'document-domain=()',
     'encrypted-media=()',
     'execution-while-not-rendered=()',
