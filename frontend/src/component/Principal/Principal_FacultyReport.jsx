@@ -267,24 +267,8 @@ const downloadAsPDF = async (content, filename, chartData) => {
           processedBefore = processedBefore.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + activityChartsHTML);
           processedAfter = processedAfter.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + riskChartHTML);
           
-          // Ensure content is properly set
-          beforeEl.innerHTML = processedBefore || convertMarkdownToHtml(before);
-          afterEl.innerHTML = processedAfter || convertMarkdownToHtml(after);
-          
-          // Make sure content is visible
-          beforeEl.style.display = 'block';
-          afterEl.style.display = 'block';
-          
-          // Debug: Log content to console
-          console.log('Content Before:', processedBefore);
-          console.log('Content After:', processedAfter);
-          
-          // Final fallback: if still no content, show raw content
-          if (!beforeEl.innerHTML.trim() && !afterEl.innerHTML.trim()) {
-            beforeEl.innerHTML = before;
-            afterEl.innerHTML = after;
-            console.log('Using raw content as fallback');
-          }
+          beforeEl.innerHTML = processedBefore;
+          afterEl.innerHTML = processedAfter;
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
@@ -430,7 +414,7 @@ const downloadAsPDF = async (content, filename, chartData) => {
             });
           };
           // Give charts more time to render before capturing
-          setTimeout(doDownload, 3000);
+          setTimeout(doDownload, 1000);
         })();
       </script>
     </body>
