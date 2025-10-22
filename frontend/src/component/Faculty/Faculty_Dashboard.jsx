@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import Faculty_Navbar from "./Faculty_Navbar";
 import arrowRight from "../../assets/arrowRight.png";
 import ProfileMenu from "../ProfileMenu";
+import DEFAULT_IMAGE_URL from "../../assets/logo/Logo5.svg"; 
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -335,7 +336,7 @@ export default function Faculty_Dashboard() {
               >
                 {/* Image section */}
                 <div
-                  className="flex items-center justify-center bg-gray-500"
+                  className="flex items-center justify-center  bg-gradient-to-r from-blue-900 to-blue-950"
                   style={{
                     height: "160px",
                     borderTopLeftRadius: "28px",
@@ -360,7 +361,7 @@ export default function Faculty_Dashboard() {
                       }}
                     />
                   ) : (
-                    <span className="text-white text-xl font-bold">image</span>
+                    <span className="text-white text-xl font-bold justify-center align-middle items-center flex"><img src={DEFAULT_IMAGE_URL} alt="Class" className="w-[50%] h-full " /></span>
                   )}
                 </div>
                 {/* Info section */}

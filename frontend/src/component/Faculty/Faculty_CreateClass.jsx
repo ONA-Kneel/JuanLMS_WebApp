@@ -5,8 +5,6 @@ import Faculty_Navbar from "./Faculty_Navbar";
 import ValidationModal from "../ValidationModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
-// ⬆️ Top-level (under other imports/consts)
-const DEFAULT_IMAGE_URL = "https://www.eclosio.ong/wp-content/uploads/2018/08/default.png";
 
 
 export default function FacultyCreateClass() {
@@ -116,65 +114,57 @@ export default function FacultyCreateClass() {
     setClassImage(null);
   };
 
-  // ⬇️ Replace your current handleSubmitConfirmation with this version
-const handleSubmitConfirmation = async () => {
-  if (!confirmingClass) return;
+  const handleSubmitConfirmation = async () => {
+    if (!confirmingClass) return;
 
-  try {
-    const token = localStorage.getItem('token');
-    const formData = new FormData();
-    formData.append('classDesc', classDesc);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('classDesc', classDesc);
+      if (classImage) {
+        formData.append('image', classImage);
+      }
 
-    if (classImage) {
-      // If a file was chosen, upload it
-      formData.append('image', classImage);
-    } else {
-      // If no file was chosen, send a default image URL
-      // (Most backends accept a simple string field alongside file uploads.)
-      formData.append('imageUrl', DEFAULT_IMAGE_URL);
-    }
-
-    const res = await fetch(`${API_BASE}/api/classes/${confirmingClass.classID}/confirm`, {
-      method: 'PATCH',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` })
-      },
-      body: formData
-    });
-
-    if (res.ok) {
-      setValidationModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Class Confirmed',
-        message: `Class "${confirmingClass.className}" has been confirmed successfully!`
+      const res = await fetch(`${API_BASE}/api/classes/${confirmingClass.classID}/confirm`, {
+        method: 'PATCH',
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: formData
       });
-      
-      // Remove from pending
-      setPendingClasses(prev => prev.filter(c => c.classID !== confirmingClass.classID));
-      setConfirmingClass(null);
-      setClassDesc("");
-      setClassImage(null);
-    } else {
-      const data = await res.json();
+
+      if (res.ok) {
+        setValidationModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Class Confirmed',
+          message: `Class "${confirmingClass.className}" has been confirmed successfully!`
+        });
+        
+        // Remove the confirmed class from pending list
+        setPendingClasses(prev => prev.filter(c => c.classID !== confirmingClass.classID));
+        setConfirmingClass(null);
+        setClassDesc("");
+        setClassImage(null);
+      } else {
+        const data = await res.json();
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Confirmation Failed',
+          message: data.error || 'Failed to confirm class'
+        });
+      }
+    } catch (error) {
+      console.error('Error confirming class:', error);
       setValidationModal({
         isOpen: true,
         type: 'error',
-        title: 'Confirmation Failed',
-        message: data.error || 'Failed to confirm class'
+        title: 'Network Error',
+        message: 'Network error. Please check your connection and try again.'
       });
     }
-  } catch (error) {
-    console.error('Error confirming class:', error);
-    setValidationModal({
-      isOpen: true,
-      type: 'error',
-      title: 'Network Error',
-      message: 'Network error. Please check your connection and try again.'
-    });
-  }
-};
-
+  };
 
 
   if (loading) {

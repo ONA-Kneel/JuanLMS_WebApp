@@ -6,6 +6,7 @@ import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import createEvent from "../../assets/createEvent.png";
 import { getFileUrl } from "../../utils/imageUtils";
+import DEFAULT_IMAGE_URL from "../../assets/logo/Logo5.svg"; 
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -192,7 +193,7 @@ export default function Faculty_Classes() {
                 onClick={() => navigate(`/faculty_class/${cls.classID}`)}
               >
                 {/* Image section */}
-                <div className="flex items-center justify-center bg-gray-500" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
+                <div className="flex items-center justify-center bg-gradient-to-r from-blue-900 to-blue-950" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
                   {cls.image ? (
                     <img
                       src={getFileUrl(cls.image, API_BASE)}
@@ -201,7 +202,7 @@ export default function Faculty_Classes() {
                       style={{ height: '100%', width: '100%', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, display: 'block' }}
                     />
                   ) : (
-                    <span className="text-white text-xl font-bold">image</span>
+                    <span className="text-white text-xl font-bold justify-center align-middle items-center flex"><img src={DEFAULT_IMAGE_URL} alt="Class" className="w-[50%] h-full " /></span>
                   )}
                 </div>
                 {/* Info section */}
