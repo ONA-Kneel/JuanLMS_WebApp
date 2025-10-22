@@ -255,9 +255,31 @@ Focus on this section: how students are doing (engagement signals, timeliness), 
     const workloadLines = analysisData.workloadByFaculty.map(w => `- ${w.facultyName}${w.sections && w.sections.length ? ` (Sections: ${w.sections.join(', ')})` : ''}: ${w.totalActivities} activities`).join('\n');
 
     // Get creator name for the analysis
-    const creatorName = req.user.firstname && req.user.lastname 
-      ? `${req.user.firstname} ${req.user.lastname}` 
-      : req.user.firstname || req.user.lastname || 'System Administrator';
+    let creatorName = 'System Administrator';
+    
+    // Try to get name from JWT token first
+    if (req.user.name) {
+      creatorName = req.user.name;
+    } else {
+      // Fallback: fetch user details from database
+      try {
+        const userDetails = await db.collection('users').findOne({ _id: new ObjectId(req.user._id) });
+        if (userDetails) {
+          const firstName = userDetails.getDecryptedFirstname ? userDetails.getDecryptedFirstname() : userDetails.firstname;
+          const lastName = userDetails.getDecryptedLastname ? userDetails.getDecryptedLastname() : userDetails.lastname;
+          if (firstName && lastName) {
+            creatorName = `${firstName} ${lastName}`;
+          } else if (firstName) {
+            creatorName = firstName;
+          } else if (lastName) {
+            creatorName = lastName;
+          }
+        }
+      } catch (dbError) {
+        console.error('Error fetching user details for creator name:', dbError);
+        // Keep default 'System Administrator' if database fetch fails
+      }
+    }
 
     const prompt = `As an educational analytics expert, prepare a role-aware report.\n${audienceLine}\n${focusBlock}\n\nSCHOOL YEAR: ${schoolYear}\nTERM: ${termName}\n\nFACULTY DIRECTORY (Names and Sections):\n${facultyDirectoryLines || '- No faculty listed'}\n\nFACULTY ACTIVITIES:\n- Total faculty assignments: ${analysisData.facultyAssignments}\n- Sections: ${analysisData.sections.join(', ') || 'None found'}\n- Tracks: ${analysisData.tracks.join(', ') || 'None found'}\n- Strands: ${analysisData.strands.join(', ') || 'None found'}\n- Faculty members: ${analysisData.facultyNames.join(', ') || 'None found'}\n- Workload by faculty:\n${workloadLines || '- No creators found'}\n\nACTIVITY SUMMARY (Assignments + Quizzes):\n- Total: ${analysisData.activitySummary.totalActivities}\n- Assignments: ${analysisData.activitySummary.assignmentsCount}\n- Quizzes: ${analysisData.activitySummary.quizzesCount}\n- Posted: ${analysisData.activitySummary.postedActivities}\n- Pending: ${analysisData.activitySummary.pendingActivities}\n\nSTUDENT ENGAGEMENT SIGNALS (from audit logs):\n- Interactions total: ${analysisData.studentEngagement.totalStudents}\n- Logins: ${analysisData.studentEngagement.loginCount}\n- Logouts: ${analysisData.studentEngagement.logoutCount}\n- Other actions: ${analysisData.studentEngagement.otherActions}\n\nSYSTEM OVERVIEW:\n- Total classes: ${analysisData.classes}\n- Total audit logs: ${analysisData.auditLogs}\n\nPlease provide:\n1) Executive summary tailored to the audience and report scope.\n2) Key findings for the scope (${inferredReportType}).\n3) For STRAND scope: what is seen in the strand and concrete improvements.\n4) For SECTION scope: how the students are doing, strengths and weaknesses, targeted interventions.\n5) Faculty recommendations to enhance engagement and activity effectiveness.\n6) Risks and next steps.\n\nIMPORTANT FORMATTING REQUIREMENTS:\n- Do NOT use markdown headers (###, ##, #) in your response\n- Use plain text formatting with clear section breaks\n- End the report with a clear signature section:
   "REPORT PREPARED BY:

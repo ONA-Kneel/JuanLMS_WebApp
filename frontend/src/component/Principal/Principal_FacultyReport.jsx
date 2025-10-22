@@ -178,34 +178,6 @@ const downloadAsPDF = async (content, filename, chartData) => {
         <div class="chart-title">Distribution of Activities</div>
         <canvas id="activityPieChart" width="220" height="220" style="max-width:220px; max-height:220px; margin: 0 auto; display:block;"></canvas>
       </div>
-      
-      <!-- Additional Charts Section -->
-      <div class="chart-section" style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">
-        <div class="chart-title">Activity Distribution Charts</div>
-        <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
-          <div style="text-align: center;">
-            <div style="font-weight: bold; margin-bottom: 8px;">By Section</div>
-            <canvas id="sectionChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-weight: bold; margin-bottom: 8px;">By Track</div>
-            <canvas id="trackChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
-          </div>
-          <div style="text-align: center;">
-            <div style="font-weight: bold; margin-bottom: 8px;">By Strand</div>
-            <canvas id="strandChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
-          </div>
-        </div>
-        
-        <!-- Risk Assessment Chart -->
-        <div style="margin-top: 30px; padding: 16px; background: linear-gradient(to right, #fef2f2, #fff7ed); border-left: 4px solid #ef4444; border-radius: 8px;">
-          <div style="font-size: 18px; font-weight: bold; color: #dc2626; margin-bottom: 16px;">Risk Assessment & Next Steps</div>
-          <div style="display: flex; justify-content: center;">
-            <canvas id="risksChart" width="400" height="200" style="max-width:400px; max-height:200px;"></canvas>
-          </div>
-        </div>
-      </div>
-      
       <div id="contentAfter" class="content"></div>
       <div class="footer">
         <div class="footer-left">
@@ -256,8 +228,47 @@ const downloadAsPDF = async (content, filename, chartData) => {
           }
           const beforeEl = document.getElementById('contentBefore');
           const afterEl = document.getElementById('contentAfter');
-          beforeEl.innerHTML = convertMarkdownToHtml(before);
-          afterEl.innerHTML = convertMarkdownToHtml(after);
+          // Process content and insert charts at appropriate positions
+          let processedBefore = convertMarkdownToHtml(before);
+          let processedAfter = convertMarkdownToHtml(after);
+          
+          // Insert Activity Distribution Charts after Executive Summary (position 1)
+          const activityChartsHTML = `
+            <div style="margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">
+              <div style="font-weight: bold; font-size: 16px; margin-bottom: 16px; text-align: center;">Activity Distribution Charts</div>
+              <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; margin: 20px 0;">
+                <div style="text-align: center;">
+                  <div style="font-weight: bold; margin-bottom: 8px;">By Section</div>
+                  <canvas id="sectionChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-weight: bold; margin-bottom: 8px;">By Track</div>
+                  <canvas id="trackChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-weight: bold; margin-bottom: 8px;">By Strand</div>
+                  <canvas id="strandChart" width="180" height="180" style="max-width:180px; max-height:180px;"></canvas>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Insert Risk Assessment Chart at position 6 (after section scope analysis)
+          const riskChartHTML = `
+            <div style="margin: 20px 0; padding: 16px; background: linear-gradient(to right, #fef2f2, #fff7ed); border-left: 4px solid #ef4444; border-radius: 8px;">
+              <div style="font-size: 18px; font-weight: bold; color: #dc2626; margin-bottom: 16px;">Risk Assessment & Next Steps</div>
+              <div style="display: flex; justify-content: center;">
+                <canvas id="risksChart" width="400" height="200" style="max-width:400px; max-height:200px;"></canvas>
+              </div>
+            </div>
+          `;
+          
+          // Insert charts at appropriate positions
+          processedBefore = processedBefore.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + activityChartsHTML);
+          processedAfter = processedAfter.replace(/(<h[1-6][^>]*>.*?<\/h[1-6]>)/i, '$1' + riskChartHTML);
+          
+          beforeEl.innerHTML = processedBefore;
+          afterEl.innerHTML = processedAfter;
 
           const values = [${(chartData && chartData.assignmentsCount) || 0}, ${(chartData && chartData.quizzesCount) || 0}];
           const hasData = (values[0] + values[1]) > 0;
