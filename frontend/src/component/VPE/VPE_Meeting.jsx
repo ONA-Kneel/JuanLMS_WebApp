@@ -372,17 +372,10 @@ const VPE_Meeting = () => {
          {activeMeeting && (
            <StreamMeetingRoom
              meetingData={activeMeeting}
-             currentUser={userInfo}
              onLeave={handleLeaveMeeting}
              isOpen={!!activeMeeting}
              isHost={true}
-             hostUserId={'Oxidized_Kookaburra'}
-             credentials={{
-              apiKey: 'mmhfdzb5evj2',
-            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL094aWRpemVkX0tvb2thYnVycmEiLCJ1c2VyX2lkIjoiT3hpZGl6ZWRfS29va2FidXJyYSIsInZhbGlkaXR5X2luX3NlY29uZHMiOjYwNDgwMCwiaWF0IjoxNzYxMTEwNDQ0LCJleHAiOjE3NjE3MTUyNDR9.yV__pf5jXp9MUc5xwD5hD3h3pSbX0du0wTs-X7Y12os',
-            userId: 'Oxidized_Kookaburra',
-            callId: '4hKhUw1SorDScC67b0pTi',
-             }}
+             hostUserId={userInfo.name}
            />
          )}
       </div>

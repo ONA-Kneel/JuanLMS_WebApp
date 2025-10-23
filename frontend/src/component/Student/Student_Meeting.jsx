@@ -16,29 +16,12 @@ export default function Student_Meeting() {
   const [loading, setLoading] = useState(true);
   const [meetingRefreshTrigger, setMeetingRefreshTrigger] = useState(0);
   const [activeMeeting, setActiveMeeting] = useState(null);
-  const [userInfo, setUserInfo] = useState({ name: '', email: '' });
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [studentCounts, setStudentCounts] = useState({});
   const [activeTab, setActiveTab] = useState('class-meetings'); // 'class-meetings', 'invited-meetings', or 'host-meeting'
   const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState([]);
-
-  // Get user info from token
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setUserInfo({
-          name: payload.firstName && payload.lastName ? `${payload.firstName} ${payload.lastName}` : payload.username || 'Student',
-          email: payload.email || ''
-        });
-      } catch (error) {
-        console.error('Error parsing token:', error);
-      }
-    }
-  }, []);
 
   // Fetch academic year
   useEffect(() => {
@@ -385,16 +368,10 @@ export default function Student_Meeting() {
         {activeMeeting && (
           <StreamMeetingRoom
             meetingData={activeMeeting}
-            currentUser={userInfo}
             onLeave={handleLeaveMeeting}
             isOpen={!!activeMeeting}
             isHost={false}
-            credentials={{
-              apiKey: 'mmhfdzb5evj2',
-            token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3Byb250by5nZXRzdHJlYW0uaW8iLCJzdWIiOiJ1c2VyL094aWRpemVkX0tvb2thYnVycmEiLCJ1c2VyX2lkIjoiT3hpZGl6ZWRfS29va2FidXJyYSIsInZhbGlkaXR5X2luX3NlY29uZHMiOjYwNDgwMCwiaWF0IjoxNzYxMTEwNDQ0LCJleHAiOjE3NjE3MTUyNDR9.yV__pf5jXp9MUc5xwD5hD3h3pSbX0du0wTs-X7Y12os',
-            userId: 'Oxidized_Kookaburra',
-            callId: '4hKhUw1SorDScC67b0pTi',
-            }}
+            hostUserId={activeMeeting.hostName || 'Host'}
           />
         )}
 

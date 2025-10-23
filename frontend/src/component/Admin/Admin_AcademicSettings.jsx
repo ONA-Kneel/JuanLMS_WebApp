@@ -2253,13 +2253,13 @@ export default function Admin_AcademicSettings() {
                               ) : (
                                 <>
                                   {term.status === 'active' ? (
-                                    <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
-                                      active
-                                    </span>
-                                  ) : (
-                                    <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                                      {term.status === 'archived' ? 'archived' : term.status}
-                                    </span>
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
+                                    active
+                                  </span>
+                                ) : (
+                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                                    {term.status === 'archived' ? 'archived' : term.status}
+                                  </span>
                                   )}
                                   <button
                                     onClick={() => handleToggleTermStatus(term)}

@@ -76,6 +76,8 @@
 .stream-meeting-sidepanel .str-video__participant,
 .stream-meeting-sidepanel .str-video__text,
 .stream-meeting-sidepanel .str-video__label,
+.stream-meeting-sidepanel .str-video__participant-name,
+.stream-meeting-sidepanel .str-video__participant-info,
 .stream-meeting-sidepanel input::placeholder {
   color: #e5e7eb !important;
 }
@@ -87,6 +89,15 @@
 }
 .stream-meeting-sidepanel .str-video__muted-badge {
   color: #cbd5e1 !important;
+}
+
+/* Ensure participant names are visible in the side panel */
+.stream-meeting-sidepanel .str-video__participant-name {
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .stream-controls-wrap {
@@ -145,6 +156,77 @@
 .str-video__call-stats .str-video__card {
   background: #ffffff !important;
   border-color: #e5e7eb !important;
+}
+
+/* Custom participant layout styles */
+.single-participant-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.two-participants-view {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+}
+
+.multiple-participants-view {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+/* Ensure participant names are visible */
+.str-video__participant-view,
+.str-video__participant-view * {
+  color: #e5e7eb !important;
+}
+
+.str-video__participant-view .str-video__participant-label,
+.str-video__participant-view .str-video__participant-name,
+.str-video__participant-view .str-video__participant-info,
+.str-video__participant-view .str-video__participant-details {
+  color: #e5e7eb !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  position: absolute !important;
+  bottom: 8px !important;
+  left: 8px !important;
+  z-index: 10 !important;
+}
+
+/* Ensure participant names are always visible */
+.str-video__participant-view .str-video__participant-label {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Ensure participant video containers are properly sized */
+.str-video__participant-view {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1d24;
+}
+
+.str-video__participant-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 

@@ -14,6 +14,96 @@ const JITSI_USE_JWT = (process.env.JITSI_USE_JWT || 'false').toLowerCase() === '
 const JITSI_APP_ID = process.env.JITSI_APP_ID || '';
 const JITSI_SECRET = process.env.JITSI_SECRET || '';
 
+// Stream Video configuration
+const STREAM_API_KEY = process.env.STREAM_API_KEY || 'veyeuctsfcqt';
+const STREAM_API_SECRET = process.env.STREAM_API_SECRET || 'gz28qmg9emda57vfejtcmgd26yxeze4yeeqfqf2kvtue4vjwsss7pjy2btnrn286';
+
+// Helper function to create Stream Video JWT token
+const createStreamVideoToken = (userId, expiresInSeconds = 3600) => {
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Try the minimal payload structure first
+  const payload = {
+    iss: STREAM_API_KEY,
+    sub: userId,
+    user_id: userId,
+    iat: now,
+    exp: now + expiresInSeconds
+  };
+  
+  console.log(`[STREAM-CREDS] Creating JWT with payload:`, payload);
+  console.log(`[STREAM-CREDS] Using secret: ${STREAM_API_SECRET.substring(0, 10)}...`);
+  console.log(`[STREAM-CREDS] API Key: ${STREAM_API_KEY}`);
+  
+  return jwt.sign(payload, STREAM_API_SECRET, { algorithm: 'HS256' });
+};
+
+// POST /api/meetings/stream-credentials - Generate Stream Video credentials
+router.post('/stream-credentials', authenticateToken, async (req, res) => {
+  try {
+    const { callId } = req.body;
+    
+    if (!callId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'callId is required' 
+      });
+    }
+
+    // Get user information
+    const userId = String(req.user._id);
+    
+    // Debug: Log the user object to see what fields are available
+    console.log(`[STREAM-CREDS] User object:`, {
+      _id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role
+    });
+    
+    const userName = req.user.name || 'User';
+    const userEmail = req.user.email || '';
+
+    console.log(`[STREAM-CREDS] Generating credentials for user: ${userId}, name: ${userName}, callId: ${callId}`);
+
+    // Create a JWT token for the user (valid for 1 hour)
+    const token = createStreamVideoToken(userId, 3600);
+    
+    // Debug: Log the generated token and its parts
+    console.log(`[STREAM-CREDS] Generated token: ${token}`);
+    try {
+      const decoded = jwt.decode(token, { complete: true });
+      console.log(`[STREAM-CREDS] Token header:`, decoded.header);
+      console.log(`[STREAM-CREDS] Token payload:`, decoded.payload);
+    } catch (err) {
+      console.error(`[STREAM-CREDS] Error decoding token:`, err);
+    }
+
+    const credentials = {
+      success: true,
+      apiKey: STREAM_API_KEY,
+      token,
+      userId,
+      callId: String(callId),
+      userInfo: {
+        id: userId,
+        name: userName,
+        email: userEmail
+      }
+    };
+
+    console.log(`[STREAM-CREDS] Successfully generated credentials for user: ${userId}`);
+    res.json(credentials);
+  } catch (err) {
+    console.error('[STREAM-CREDS] Error generating Stream credentials:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create Stream credentials',
+      error: err.message 
+    });
+  }
+});
+
 // GET /api/meetings/class/:classID - Get all meetings for a class
 router.get('/class/:classID', authenticateToken, async (req, res) => {
   try {
@@ -254,42 +344,21 @@ function buildRoomName(meeting) {
   return base ? `${base}-${suffix}` : String(meeting._id);
 }
 
-// POST /api/meetings/:meetingID/join - Join a meeting
+// POST /api/meetings/:meetingID/join - Join a meeting (Stream.io)
 router.post('/:meetingID/join', authenticateToken, async (req, res) => {
   try {
     const { meetingID } = req.params;
     const meeting = await Meeting.findById(meetingID);
     if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
 
-    const roomName = buildRoomName(meeting);
-
-    // Default: no JWT, anonymous access on your Jitsi deployment
-    let token = undefined;
-
-    if (JITSI_USE_JWT) {
-      // Optional JWT: enables moderator/guest roles based on token when configured in Jitsi
-      // See: Jitsi JWT docs; this signs token with app_id and secret
-      const now = Math.floor(Date.now() / 1000);
-      const payload = {
-        aud: 'jitsi',
-        iss: JITSI_APP_ID,
-        sub: JITSI_DOMAIN, // your deployment domain
-        room: roomName,
-        exp: now + 60 * 60, // 1 hour
-        nbf: now - 10,
-        context: {
-          user: {
-            name: req.user?.name || 'User',
-            email: req.user?.email || undefined,
-            affiliation: (req.user?.role === 'faculty' || req.user?.role === 'admin') ? 'owner' : 'member'
-          }
-        }
-      };
-      token = jwt.sign(payload, JITSI_SECRET);
-    }
-
-    const roomUrl = `https://${JITSI_DOMAIN}/${encodeURIComponent(roomName)}`;
-    res.json({ roomUrl, jwt: token });
+    // For Stream.io, we don't need a roomUrl - the frontend will use the meeting ID as callId
+    // The Stream credentials will be fetched separately via /stream-credentials endpoint
+    res.json({ 
+      success: true,
+      meetingId: meeting._id,
+      callId: String(meeting._id), // Use meeting ID as Stream call ID
+      message: 'Meeting ready for Stream.io connection'
+    });
   } catch (err) {
     console.error('Error joining meeting:', err);
     res.status(500).json({ error: 'Failed to join meeting' });

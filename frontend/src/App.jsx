@@ -133,6 +133,15 @@ function App() {
       const currentVisibility = document.visibilityState;
       const currentTime = Date.now();
       
+      // Skip tab switching detection if we're in a meeting (Stream component might cause visibility changes)
+      const isInMeeting = window.location.pathname.includes('meeting') || 
+                         document.querySelector('.stream-meeting-overlay') !== null;
+      
+      if (isInMeeting) {
+        console.log('[App] In meeting context, skipping tab switching detection');
+        return;
+      }
+      
       // Only redirect if this is genuinely a new tab/window, not tab switching
       if (isNewTab && currentVisibility === 'visible' && lastVisibilityState === 'hidden') {
         // Additional checks to ensure this is really a new tab, not tab switching:

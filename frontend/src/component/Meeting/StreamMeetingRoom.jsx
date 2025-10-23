@@ -7,12 +7,16 @@ import {
   CallParticipantsList,
   CallStatsButton,
   RecordCallButton,
+  ParticipantView,
 } from '@stream-io/video-react-sdk';
 import { PhoneOff, MonitorUp, Mic, MicOff, Video as VideoIcon, VideoOff, BarChart3, Circle, CircleStop, AlertCircle } from 'lucide-react';
 import '@stream-io/video-react-sdk/dist/css/styles.css';
 import './StreamMeetingRoom.css';
 import PermissionRequestModal from './PermissionRequestModal';
 import { mediaPermissions } from '../../utils/mediaPermissions';
+import { generateCallId } from '../../utils/streamCredentials';
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Stream meeting room wrapper
 // Props:
@@ -20,14 +24,12 @@ import { mediaPermissions } from '../../utils/mediaPermissions';
 // - onClose: optional callback when closing
 // - onLeave: callback when the user leaves
 // - meetingData: object possibly containing meetingId/_id/title/roomUrl
-// - currentUser: { name, email } used for display name metadata
-// - credentials: { apiKey, token, userId, callId? } required to connect to Stream
+// - credentials: { apiKey, token, userId, callId? } required to connect to Stream (optional, will fetch from backend if not provided)
 const StreamMeetingRoom = ({
   isOpen,
   onClose,
   onLeave,
   meetingData,
-  currentUser,
   credentials,
   isHost = false,
   hostUserId,
@@ -45,11 +47,51 @@ const StreamMeetingRoom = ({
   const recordButtonRef = React.useRef(null);
   const [hostPresent, setHostPresent] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [permissionError, setPermissionError] = useState('');
 
-  const apiKey = credentials?.apiKey;
-  const userToken = credentials?.token;
-  const userId = credentials?.userId;
+  // Fetch Stream credentials from backend
+  const [streamCredentials, setStreamCredentials] = useState(null);
+  const [isLoadingCredentials, setIsLoadingCredentials] = useState(false);
+  
+  useEffect(() => {
+    const fetchCredentials = async () => {
+      if (!isOpen || !meetingData) return;
+      
+      setIsLoadingCredentials(true);
+      try {
+        const callId = generateCallId(meetingData);
+        
+        const response = await fetch(`${API_BASE}/api/meetings/stream-credentials`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ callId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          setStreamCredentials(data);
+          console.log('[STREAM-CREDS] Successfully fetched credentials from backend');
+        } else {
+          console.error('[STREAM-CREDS] Failed to fetch credentials:', data.message);
+          setError(data.message || 'Failed to get Stream credentials');
+        }
+      } catch (error) {
+        console.error('[STREAM-CREDS] Error fetching credentials:', error);
+        setError('Failed to connect to Stream service');
+      } finally {
+        setIsLoadingCredentials(false);
+      }
+    };
+    
+    fetchCredentials();
+  }, [isOpen, meetingData]);
+
+  const apiKey = streamCredentials?.apiKey;
+  const userToken = streamCredentials?.token;
+  const userId = streamCredentials?.userId;
 
   // Determine callId preference: explicit credentials.callId, then meetingData.meetingId/_id, then parsed from roomUrl
   const resolvedCallId = useMemo(() => {
@@ -66,30 +108,39 @@ const StreamMeetingRoom = ({
     } catch (e) {
       console.debug('StreamMeetingRoom: failed to parse roomUrl', e);
     }
-    return '';
+    return generateCallId(meetingData);
   }, [credentials?.callId, meetingData]);
 
   const userInfo = useMemo(() => {
-    let displayName = currentUser?.name;
-    // Fallback: try to read from app JWT stored in localStorage
-    if (!displayName) {
-      try {
-        const appToken = localStorage.getItem('token');
-        if (appToken) {
-          const payload = JSON.parse(atob(appToken.split('.')[1] || '')) || {};
-          const full = payload.firstName && payload.lastName ? `${payload.firstName} ${payload.lastName}` : '';
-          displayName = full || payload.username || payload.name || displayName;
-        }
-      } catch (e) {
-        console.debug('StreamMeetingRoom: failed to decode app token', e);
-      }
+    // Use the generated stream credentials userInfo, with fallback
+    const streamUserInfo = streamCredentials?.userInfo;
+    if (streamUserInfo && streamUserInfo.name) {
+      console.log('[StreamMeetingRoom] Using userInfo from backend:', streamUserInfo);
+      return streamUserInfo;
     }
-    if (!displayName) displayName = userId || 'User';
-    return {
-      id: String(userId || 'anonymous_user'),
-      name: String(displayName),
-    };
-  }, [currentUser?.name, userId]);
+    
+    // Fallback: get user info from localStorage token
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const fallbackUserInfo = {
+          id: payload.userId || payload._id,
+          name: `${payload.firstName || ''} ${payload.lastName || ''}`.trim() || payload.username || 'User',
+          email: payload.email || ''
+        };
+        console.log('[StreamMeetingRoom] Using fallback userInfo:', fallbackUserInfo);
+        return fallbackUserInfo;
+      }
+    } catch (error) {
+      console.error('[StreamMeetingRoom] Error parsing token for userInfo:', error);
+    }
+    
+    // Final fallback
+    const finalFallback = { id: 'user', name: 'User', email: '' };
+    console.log('[StreamMeetingRoom] Using final fallback userInfo:', finalFallback);
+    return finalFallback;
+  }, [streamCredentials]);
 
   const handleLeave = useCallback(async () => {
     try {
@@ -191,7 +242,6 @@ const StreamMeetingRoom = ({
     const states = mediaPermissions.getPermissionStates();
     
     if (states.camera === 'denied' || states.microphone === 'denied') {
-      setPermissionError('Camera or microphone access was denied. Please enable permissions in your browser settings.');
       setShowPermissionModal(true);
       return false;
     }
@@ -201,7 +251,6 @@ const StreamMeetingRoom = ({
 
   const handlePermissionsGranted = useCallback(() => {
     setShowPermissionModal(false);
-    setPermissionError('');
     // Retry joining the call
     window.location.reload();
   }, []);
@@ -216,6 +265,14 @@ const StreamMeetingRoom = ({
 
     const join = async () => {
       if (!isOpen) return;
+      if (isLoadingCredentials) {
+        setError('Loading Stream credentials...');
+        return;
+      }
+      if (!streamCredentials) {
+        setError('Failed to load Stream credentials');
+        return;
+      }
       if (!apiKey || !userToken || !userId) {
         setError('Missing Stream credentials');
         return;
@@ -235,7 +292,10 @@ const StreamMeetingRoom = ({
       setError('');
       try {
         const c = new StreamVideoClient({ apiKey });
+        
+        console.log('[StreamMeetingRoom] Connecting user with:', { userInfo, userToken: userToken?.substring(0, 20) + '...' });
         await c.connectUser(userInfo, userToken);
+        
         if (isCancelled) return;
 
         const callInstance = c.call('default', resolvedCallId);
@@ -290,7 +350,7 @@ const StreamMeetingRoom = ({
         try { if (client) await client.disconnectUser(); } catch (e) { console.debug('cleanup disconnect error', e); }
       })();
     };
-  }, [apiKey, userToken, userId, resolvedCallId, userInfo, isOpen, checkPermissions]);
+  }, [apiKey, userToken, userId, resolvedCallId, isOpen, streamCredentials?.success]); // Excluding call/client to prevent infinite re-renders
 
   // Watch for host presence for students; show overlay until host joins
   useEffect(() => {
@@ -308,7 +368,7 @@ const StreamMeetingRoom = ({
     updatePresence();
     const interval = setInterval(updatePresence, 1500);
     return () => clearInterval(interval);
-  }, [call, hostUserId, isHost]);
+  }, [hostUserId, isHost]); // Excluding call to prevent instability
 
   // If call ends (host clicked end for everyone), auto leave/redirect
   useEffect(() => {
@@ -333,7 +393,7 @@ const StreamMeetingRoom = ({
       clearInterval(endedInterval);
       try { if (typeof call.off === 'function') { call.off('call.ended', handleLeave); call.off('ended', handleLeave); } } catch (err) { void err; }
     };
-  }, [call, handleLeave]);
+  }, [handleLeave]); // Excluding call to prevent infinite re-renders
 
   if (!isOpen) return null;
 
@@ -367,8 +427,12 @@ const StreamMeetingRoom = ({
 
   const meetingTitle = meetingData?.title || `Call ${resolvedCallId}`;
 
+
+  // Use Stream's built-in participant layout instead of custom one
+  // This prevents call state issues and participant disconnections
+
   return (
-    <div className="stream-meeting-overlay">
+    <div className="stream-meeting-overlay" key={`meeting-${resolvedCallId}`}>
       <div className="stream-meeting-header">
         <div className="font-semibold truncate">{meetingTitle}</div>
         {/* Removed top-right leave button by request */}
