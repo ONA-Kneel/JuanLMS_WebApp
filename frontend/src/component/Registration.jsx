@@ -131,13 +131,14 @@ export default function Registration() {
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    // Validate email format for SJDEFI domains
+    const emailRegex = /^[^\s@]+@(sjdefi\.edu\.ph|students\.sjdefi\.edu\.ph)$/;
     if (!emailRegex.test(form.personalEmail)) {
       setValidationModal({ 
         isOpen: true, 
         type: 'warning', 
         title: 'Invalid Email', 
-        message: 'Please enter a valid email address (e.g., username@gmail.com).' 
+        message: 'Please enter a valid SJDEFI email address (e.g., username@sjdefi.edu.ph or username@students.sjdefi.edu.ph).' 
       });
       return;
     }
@@ -245,9 +246,10 @@ export default function Registration() {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Missing Information', message: 'Please fill in all required fields.' });
       setLoading(false); return;
     }
-    const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    // Validate email format for SJDEFI domains
+    const emailRegex = /^[^\s@]+@(sjdefi\.edu\.ph|students\.sjdefi\.edu\.ph)$/;
     if (!emailRegex.test(form.personalEmail)) {
-      setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Email', message: 'Please enter a valid email address (e.g., username@gmail.com).' });
+      setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Email', message: 'Please enter a valid SJDEFI email address (e.g., username@sjdefi.edu.ph or username@students.sjdefi.edu.ph).' });
       setLoading(false); return;
     }
     if (!form.agreeToPrivacyPolicy) {
