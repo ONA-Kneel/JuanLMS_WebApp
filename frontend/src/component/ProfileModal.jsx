@@ -380,9 +380,15 @@ function ChangePasswordModal({ userId, onClose }) {
     }
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       await axios.patch(`${API_BASE}/users/${userId}/change-password`, {
         currentPassword,
         newPassword
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       setSuccess("Password changed successfully!");
       // Optimistically reflect changePassAttempts++ in local storage/user state

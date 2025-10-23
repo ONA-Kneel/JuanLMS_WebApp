@@ -1724,7 +1724,7 @@ userRoutes.post('/users/:id/request-password-change-otp', async (req, res) => {
 });
 
 // Change password route (requires current password, after OTP is validated)
-userRoutes.patch("/users/:id/change-password", async (req, res) => {
+userRoutes.patch("/users/:id/change-password", authenticateToken, async (req, res) => {
   const db = database.getDb();
   const { currentPassword, newPassword } = req.body;
   const userId = req.params.id;
@@ -1739,6 +1739,11 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
   const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
   if (!user) return res.status(404).json({ error: "User not found." });
 
+  // Ensure user can only change their own password
+  if (req.user._id !== userId) {
+    return res.status(403).json({ error: "You can only change your own password." });
+  }
+
   // Use bcrypt to compare hashed password
   const isMatch = await bcrypt.compare(currentPassword, user.password);
 
@@ -1748,12 +1753,21 @@ userRoutes.patch("/users/:id/change-password", async (req, res) => {
 
   // Hash the new password before saving
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+  console.log(`[PASSWORD CHANGE] Updating password for user ${userId}`);
 
-  await db.collection("users").updateOne(
+  const updateResult = await db.collection("users").updateOne(
     { _id: new ObjectId(userId) },
     { $set: { password: hashedNewPassword }, $unset: { resetOTP: '', resetOTPExpires: '' }, $inc: { changePassAttempts: 1 } }
   );
 
+  console.log(`[PASSWORD CHANGE] Update result:`, updateResult);
+  
+  if (updateResult.modifiedCount === 0) {
+    console.error(`[PASSWORD CHANGE] Failed to update password for user ${userId}`);
+    return res.status(500).json({ error: "Failed to update password. Please try again." });
+  }
+
+  console.log(`[PASSWORD CHANGE] Password successfully updated for user ${userId}`);
   res.json({ success: true, message: "Password updated successfully." });
 });
 
