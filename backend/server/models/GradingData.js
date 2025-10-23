@@ -36,6 +36,10 @@ const gradingDataSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  quarterlyExamHPS: {
+    type: Number,
+    default: 100
+  },
   grades: [{
     studentId: {
       type: mongoose.Schema.Types.ObjectId,

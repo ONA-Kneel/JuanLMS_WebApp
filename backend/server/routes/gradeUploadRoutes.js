@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import PostedGrades from '../models/PostedGrades.js';
 import GradingData from '../models/GradingData.js';
 import QuarterlyGrades from '../models/QuarterlyGrades.js';
+import DetailedGrades from '../models/DetailedGrades.js';
 
 const router = express.Router();
 
@@ -139,6 +140,7 @@ router.post('/save', authenticateToken, async (req, res) => {
       academicYear,
       termName,
       quarter,
+      quarterlyExamHPS,
       grades,
       savedAt
     } = req.body;
@@ -163,6 +165,7 @@ router.post('/save', authenticateToken, async (req, res) => {
       academicYear,
       termName,
       quarter,
+      quarterlyExamHPS,
       facultyId: req.user._id, // From authenticated user
       grades: grades.map(grade => ({
         studentId: grade.studentId,
@@ -190,8 +193,79 @@ router.post('/save', authenticateToken, async (req, res) => {
       updatedAt: new Date()
     };
 
-    // Save to database
+    // Save detailed grades to database
     try {
+      // First, try to find existing detailed grades record
+      let detailedGradesRecord = await DetailedGrades.findOne({
+        classId,
+        section,
+        quarter,
+        facultyId: req.user._id
+      });
+
+      if (detailedGradesRecord) {
+        // Update existing record
+        detailedGradesRecord.quarterlyExamHPS = quarterlyExamHPS;
+        detailedGradesRecord.grades = grades.map(grade => ({
+          studentId: grade.studentId,
+          studentName: grade.studentName,
+          schoolID: grade.schoolID,
+          writtenWorks: {
+            raw: grade.writtenWorksRAW,
+            hps: grade.writtenWorksHPS,
+            ps: grade.writtenWorksPS,
+            ws: grade.writtenWorksWS
+          },
+          performanceTasks: {
+            raw: grade.performanceTasksRAW,
+            hps: grade.performanceTasksHPS,
+            ps: grade.performanceTasksPS,
+            ws: grade.performanceTasksWS
+          },
+          quarterlyExam: grade.quarterlyExam,
+          initialGrade: grade.initialGrade,
+          finalGrade: grade.finalGrade,
+          trackInfo: grade.trackInfo
+        }));
+        detailedGradesRecord.savedAt = new Date();
+        await detailedGradesRecord.save();
+      } else {
+        // Create new record
+        detailedGradesRecord = new DetailedGrades({
+          classId,
+          className,
+          section,
+          academicYear,
+          termName,
+          quarter,
+          quarterlyExamHPS,
+          facultyId: req.user._id,
+          grades: grades.map(grade => ({
+            studentId: grade.studentId,
+            studentName: grade.studentName,
+            schoolID: grade.schoolID,
+            writtenWorks: {
+              raw: grade.writtenWorksRAW,
+              hps: grade.writtenWorksHPS,
+              ps: grade.writtenWorksPS,
+              ws: grade.writtenWorksWS
+            },
+            performanceTasks: {
+              raw: grade.performanceTasksRAW,
+              hps: grade.performanceTasksHPS,
+              ps: grade.performanceTasksPS,
+              ws: grade.performanceTasksWS
+            },
+            quarterlyExam: grade.quarterlyExam,
+            initialGrade: grade.initialGrade,
+            finalGrade: grade.finalGrade,
+            trackInfo: grade.trackInfo
+          }))
+        });
+        await detailedGradesRecord.save();
+      }
+
+      // Also save to GradingData for compatibility
       const gradingData = new GradingData({
         facultyId: req.user._id,
         assignmentId: new mongoose.Types.ObjectId(), // Create a unique assignment ID for this grade record
@@ -201,6 +275,7 @@ router.post('/save', authenticateToken, async (req, res) => {
         gradeLevel: 'Grade 12', // Default grade level
         schoolYear: academicYear,
         termName: termName,
+        quarterlyExamHPS: quarterlyExamHPS,
         grades: grades.map(grade => ({
           studentId: grade.studentId,
           studentName: grade.studentName,
@@ -268,12 +343,12 @@ router.get('/load', authenticateToken, async (req, res) => {
 
     // Load grades from database
     try {
-      const savedGrades = await GradingData.findOne({
-        facultyId: req.user._id,
-        sectionName: section,
-        schoolYear: req.query.schoolYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-        termName: req.query.termName || 'Term 1'
-      }).sort({ uploadedAt: -1 }); // Get the most recent grade record
+      const savedGrades = await DetailedGrades.findOne({
+        classId,
+        section,
+        quarter,
+        facultyId: req.user._id
+      });
       
       if (savedGrades) {
         console.log('✅ Found saved grades in database for:', { 
@@ -287,39 +362,33 @@ router.get('/load', authenticateToken, async (req, res) => {
         const transformedGrades = {
           _id: savedGrades._id,
           classId: classId,
-          className: savedGrades.excelFileName.split('_')[0] || 'Unknown Class',
-          section: savedGrades.sectionName,
-          academicYear: savedGrades.schoolYear,
+          className: savedGrades.className,
+          section: savedGrades.section,
+          academicYear: savedGrades.academicYear,
           termName: savedGrades.termName,
           quarter: quarter,
+          quarterlyExamHPS: savedGrades.quarterlyExamHPS || 100,
           facultyId: savedGrades.facultyId,
           grades: savedGrades.grades.map(grade => ({
             studentId: grade.studentId,
             studentName: grade.studentName,
-            schoolID: grade.studentId, // Use studentId as schoolID fallback
+            schoolID: grade.schoolID,
             writtenWorks: {
-              raw: 0,
-              hps: 0,
-              ps: 0,
-              ws: 0
+              raw: grade.writtenWorks.raw,
+              hps: grade.writtenWorks.hps,
+              ps: grade.writtenWorks.ps,
+              ws: grade.writtenWorks.ws
             },
             performanceTasks: {
-              raw: 0,
-              hps: 0,
-              ps: 0,
-              ws: 0
+              raw: grade.performanceTasks.raw,
+              hps: grade.performanceTasks.hps,
+              ps: grade.performanceTasks.ps,
+              ws: grade.performanceTasks.ws
             },
-            quarterlyExam: 0,
-            initialGrade: 0,
-            finalGrade: grade.grade,
-            trackInfo: {
-              track: savedGrades.trackName,
-              percentages: {
-                quarterly: 25,
-                performance: 50,
-                written: 25
-              }
-            }
+            quarterlyExam: grade.quarterlyExam,
+            initialGrade: grade.initialGrade,
+            finalGrade: grade.finalGrade,
+            trackInfo: grade.trackInfo
           })),
           savedAt: savedGrades.uploadedAt.toISOString(),
           createdAt: savedGrades.createdAt,
