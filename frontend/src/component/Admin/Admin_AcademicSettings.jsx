@@ -30,15 +30,14 @@ export default function Admin_AcademicSettings() {
     startDate: '',
     endDate: ''
   });
-  const [availableQuarters, setAvailableQuarters] = useState([]);
   const [termError, setTermError] = useState('');
   const [quarterError, setQuarterError] = useState('');
+  const [availableQuarters, setAvailableQuarters] = useState([]);
   const navigate = useNavigate();
   const [academicYear, setAcademicYear] = useState(null);
   const [currentTerm, setCurrentTerm] = useState(null);
   const [archivedCounts, setArchivedCounts] = useState({});
 
-  const [showActivateModal, setShowActivateModal] = useState(false);
   const [pendingSchoolYear, setPendingSchoolYear] = useState(null);
   const [showTermActivationPrompt, setShowTermActivationPrompt] = useState(false);
   const [promptTerms, setPromptTerms] = useState([]);
@@ -323,8 +322,8 @@ export default function Admin_AcademicSettings() {
                         },
                         body: JSON.stringify({ status: 'inactive' })
                       });
-                    } catch (e) {
-                      console.warn('Failed to deactivate other active quarter during rollover', q._id);
+                    } catch (error) {
+                      console.warn('Failed to deactivate other active quarter during rollover', q._id, error);
                     }
                   }
                 }
@@ -443,7 +442,7 @@ export default function Admin_AcademicSettings() {
         setShowSuccessModal(true);
         setFormData({ schoolYearStart: "", status: "inactive" });
         fetchSchoolYears();
-        setShowActivateModal(false);
+        // setShowActivateModal(false);
         setShowCreateModal(false);
         setIsEditMode(false);
         setEditingYear(null);
@@ -560,26 +559,6 @@ export default function Admin_AcademicSettings() {
     createSchoolYear(startYear, false);
   };
 
-  const handleEdit = (year) => {
-         // Prevent editing inactive school years
-     if (year.status === 'inactive') {
-       setErrorMessage('Cannot edit inactive school years. Only status changes are allowed.');
-       setShowErrorModal(true);
-       return;
-     }
-    
-    console.log('Edit clicked for year:', year);
-    setIsEditMode(true);
-    setEditingYear(year);
-    setFormData({
-      schoolYearStart: year.schoolYearStart.toString(),
-      status: year.status
-    });
-    console.log('Form data set to:', {
-      schoolYearStart: year.schoolYearStart.toString(),
-      status: year.status
-    });
-  };
 
   const handleView = (year) => {
     setSelectedYear(year);
@@ -642,9 +621,6 @@ export default function Admin_AcademicSettings() {
     setShowAddQuarterModal(true);
   };
 
-  const handleViewTerm = (term) => {
-    navigate(`/admin/academic-settings/terms/${term._id}`, { state: { term } });
-  };
 
   const handleViewQuarter = (quarter) => {
     navigate(`/admin/academic-settings/quarters/${quarter._id}`, { 
@@ -661,21 +637,6 @@ export default function Admin_AcademicSettings() {
     setSelectedYear(null);
   };
 
-  const handleArchiveTerm = async (term) => {
-         // Prevent archiving terms of inactive school years
-     if (selectedYear && selectedYear.status !== 'active') {
-       setErrorMessage('Cannot archive terms of inactive school years. Only terms of active school years can be archived.');
-       setShowErrorModal(true);
-       return;
-     }
-    
-         // Show confirmation modal
-     setConfirmMessage(`Are you sure you want to archive ${term.termName}?`);
-     setConfirmAction(() => () => {
-       handleArchiveTermInternal(term);
-     });
-     setShowConfirmModal(true);
-   };
 
    const handleArchiveTermInternal = async (term) => {
      try {
@@ -704,21 +665,6 @@ export default function Admin_AcademicSettings() {
       }
   };
 
-  const handleActivateTerm = async (term) => {
-         // Prevent activating terms of inactive school years
-     if (selectedYear && selectedYear.status !== 'active') {
-       setErrorMessage('Cannot activate terms of inactive school years. Please activate the school year first.');
-       setShowErrorModal(true);
-       return;
-     }
-    
-         // Show confirmation modal
-     setConfirmMessage(`Are you sure you want to activate ${term.termName}?`);
-     setConfirmAction(() => () => {
-       handleActivateTermInternal(term);
-     });
-     setShowConfirmModal(true);
-   };
 
    const handleActivateTermInternal = async (term) => {
      try {
@@ -881,20 +827,6 @@ export default function Admin_AcademicSettings() {
   };
 
   // Handler for adding school year as inactive
-  const handleAddSchoolYearInactive = async () => {
-    if (!pendingSchoolYear) return;
-    try {
-      await createSchoolYear(pendingSchoolYear.schoolYearStart, false); // false = not active
-      setShowActivateModal(false);
-      setPendingSchoolYear(null);
-      setSuccessMessage('School year added as inactive.');
-      setShowSuccessModal(true);
-    } catch (error) {
-      console.error('Error adding school year as inactive:', error);
-      setErrorMessage('Failed to add school year as inactive.');
-      setShowErrorModal(true);
-    }
-  };
 
   // Term editing functions
   const handleEditTerm = (term) => {
@@ -1383,21 +1315,6 @@ export default function Admin_AcademicSettings() {
     setShowEditTermModal(true);
   };
 
-  const handleActivateQuarter = async (quarter) => {
-    // Prevent activating quarters of inactive school years
-    if (selectedYear && selectedYear.status !== 'active') {
-      setErrorMessage('Cannot activate quarters of inactive school years. Please activate the school year first.');
-      setShowErrorModal(true);
-      return;
-    }
-    
-    // Show confirmation modal
-    setConfirmMessage(`Are you sure you want to activate ${quarter.quarterName}? This will activate all related tracks, strands, sections, subjects, faculty assignments, and student assignments, and automatically set all other quarters and their related entities to inactive.`);
-    setConfirmAction(() => () => {
-      handleActivateQuarterInternal(quarter);
-    });
-    setShowConfirmModal(true);
-  };
 
   const handleActivateQuarterInternal = async (quarter) => {
     try {
@@ -1461,15 +1378,6 @@ export default function Admin_AcademicSettings() {
     }
   };
 
-  // Validation function to ensure only one quarter is active at a time
-  const validateSingleActiveQuarter = async (quartersData) => {
-    const activeQuarters = quartersData.filter(q => q.status === 'active');
-    if (activeQuarters.length > 1) {
-      console.warn(`🚨 VALIDATION FAILED: ${activeQuarters.length} quarters are active. Only one should be active.`);
-      return false;
-    }
-    return true;
-  };
 
   const handleArchiveQuarter = async (quarter) => {
     // Prevent deactivating quarters of inactive school years
@@ -1663,7 +1571,8 @@ export default function Admin_AcademicSettings() {
         setErrorMessage(data.message || 'Failed to delete term');
         setShowErrorModal(true);
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('Error deleting term:', error);
       setErrorMessage('Error deleting term');
       setShowErrorModal(true);
     }
@@ -2167,6 +2076,25 @@ export default function Admin_AcademicSettings() {
                                     </svg>
                                   </button>
                                   <button
+                                    onClick={() => handleToggleStatus(year)}
+                                    className={`p-2.5 rounded-md transition-colors shadow-sm ${
+                                      year.status === 'active' 
+                                        ? 'bg-red-200 hover:bg-red-300' 
+                                        : 'bg-green-200 hover:bg-green-300'
+                                    }`}
+                                    title={year.status === 'active' ? 'Deactivate school year' : 'Activate school year'}
+                                  >
+                                    {year.status === 'active' ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-700">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-green-700">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <button
                                     onClick={() => handleDelete(year)}
                                     className="bg-red-200 hover:bg-red-300 p-2.5 rounded-md transition-colors shadow-sm"
                                     title={year.status === 'active' ? 'Archive' : 'Delete'}
@@ -2323,15 +2251,36 @@ export default function Admin_AcademicSettings() {
                                   archived
                                 </span>
                               ) : (
-                                term.status === 'active' ? (
-                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
-                                    active
-                                  </span>
-                                ) : (
-                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                                    {term.status === 'archived' ? 'archived' : term.status}
-                                  </span>
-                                )
+                                <>
+                                  {term.status === 'active' ? (
+                                    <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
+                                      active
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                                      {term.status === 'archived' ? 'archived' : term.status}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => handleToggleTermStatus(term)}
+                                    className={`p-2 rounded-md transition-colors shadow-sm ${
+                                      term.status === 'active' 
+                                        ? 'bg-red-200 hover:bg-red-300' 
+                                        : 'bg-green-200 hover:bg-green-300'
+                                    }`}
+                                    title={term.status === 'active' ? 'Deactivate term' : 'Activate term'}
+                                  >
+                                    {term.status === 'active' ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-red-700">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-green-700">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </>
                               )}
                               {/* Moved edit button next to date range for better accessibility */}
                             </div>
@@ -2392,6 +2341,27 @@ export default function Admin_AcademicSettings() {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                           </svg>
                                         </button>
+                                        {selectedYear.status === 'active' && term.status === 'active' && (
+                                          <button
+                                            onClick={() => handleToggleQuarterStatus(quarter)}
+                                            className={`p-2.5 rounded-md transition-colors shadow-sm ${
+                                              quarter.status === 'active' 
+                                                ? 'bg-red-200 hover:bg-red-300' 
+                                                : 'bg-green-200 hover:bg-green-300'
+                                            }`}
+                                            title={quarter.status === 'active' ? 'Deactivate quarter' : 'Activate quarter'}
+                                          >
+                                            {quarter.status === 'active' ? (
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-700">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                              </svg>
+                                            ) : (
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-green-700">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                        )}
                                         <button
                                           onClick={() => handleViewQuarter(quarter)}
                                           className="bg-blue-200 hover:bg-blue-300 p-2.5 rounded-md transition-colors shadow-sm"
@@ -2491,52 +2461,6 @@ export default function Admin_AcademicSettings() {
             </div>
           )}
 
-          {/* Removed activate-on-create pathway to prevent auto-creation of terms/quarters */}
-          {false && showActivateModal && pendingSchoolYear && (
-            <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-lg max-w-xl min-w-[500px] w-full">
-                <h2 className="text-xl font-semibold mb-4">Add the School Year?</h2>
-                <p className="text-gray-700 mb-6 text-center">
-                  Are you sure you want to add the School Year <strong>{pendingSchoolYear.schoolYearStart}-{pendingSchoolYear.schoolYearEnd}</strong>?
-                </p>
-                <div className="flex justify-center gap-3">
-                  <button
-                    className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
-                    onClick={() => {
-                      setShowActivateModal(false);
-                      setPendingSchoolYear(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    disabled={isSubmitting}
-                    className={`px-4 py-2 rounded hover:bg-blue-700 ${
-                      isSubmitting 
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
-                        : 'bg-blue-600 text-white'
-                    }`}
-                    onClick={handleAddSchoolYearInactive}
-                  >
-                    {isSubmitting ? 'Creating...' : 'Add as Inactive SY'}
-                  </button>
-                  <button
-                    disabled={isSubmitting}
-                    className={`px-4 py-2 rounded hover:bg-emerald-700 ${
-                      isSubmitting 
-                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
-                        : 'bg-emerald-600 text-white'
-                    }`}
-                    onClick={() => {
-                      createSchoolYear(pendingSchoolYear.schoolYearStart, true);
-                    }}
-                  >
-                    {isSubmitting ? 'Creating...' : 'Add and set is as Active SY'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {showTermActivationPrompt && promptSchoolYear && (
             <div className="fixed inset-0 backdrop-blur-sm bg-white/10 flex items-center justify-center z-50">
