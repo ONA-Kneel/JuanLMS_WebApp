@@ -46,15 +46,15 @@ const VPE_Navbar = () => {
 
     return (
         <>
-            <div>
+            {/* Toggle Button (fixed top-left on mobile) */}
             <button
                 className="md:hidden fixed top-4 left-4 z-40 bg-[#010a51] text-white p-2 rounded-lg"
                 onClick={() => setIsOpen(!isOpen)}
             >
                 {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            </div>
 
+            {/* Sidebar (always fixed, responsive visibility) */}
             <div
                 className={`bg-[#010a51] text-white p-4 w-64 h-screen fixed top-0 left-0 z-30 transform transition-transform duration-300 ease-in-out
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:block font-poppinsr`}
@@ -86,7 +86,7 @@ const VPE_Navbar = () => {
                                     setTimeout(() => setIsNavigating(false), 300);
                                 }}
                                 disabled={isNavigating}
-                                className={`text-lg flex items-center space-x-3 p-2 w-full rounded-lg transition-colors duration-200
+                                className={`text-lg flex items-center space-x-3 p-3 w-full rounded-lg transition-colors duration-200
                                 ${isActive ? "bg-[#1976d2]" : "hover:bg-[#1a237e]"} ${isNavigating ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                                 {item.isIcon ? (

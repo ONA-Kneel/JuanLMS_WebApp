@@ -282,7 +282,7 @@ export default function VPE_Dashboard() {
         )}
         {/* Main Content */}
         <div className="flex-1">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold">VPE Dashboard</h2>
               <p className="text-base md:text-lg">
@@ -296,12 +296,15 @@ export default function VPE_Dashboard() {
                 })}
               </p>
             </div>
+            <div className="flex items-center gap-4">
+              <ProfileMenu />
+            </div>
           </div>
 
-          {/* Announcements (inline box) */}
+          {/* Announcements */}
           {announcements.length > 0 && (
             <div className="mb-6">
-              <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+              <div className="bg-white rounded-2xl shadow p-4 md:p-6 border-2 border-[#00418B]">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-lg font-semibold">Announcements</h4>
                   <button

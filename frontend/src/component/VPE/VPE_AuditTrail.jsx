@@ -193,7 +193,7 @@ export default function VPE_AuditTrail() {
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <VPE_Navbar />
       <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">VPE Audit Trail</h2>
             <p className="text-base md:text-lg">
@@ -207,7 +207,9 @@ export default function VPE_AuditTrail() {
               })}
             </p>
           </div>
-          <ProfileMenu />
+          <div className="flex items-center gap-4">
+            <ProfileMenu />
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
