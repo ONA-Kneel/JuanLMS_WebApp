@@ -404,7 +404,7 @@ export default function Principal_Dashboard() {
         )}
         {/* Main Content */}
         <div className="flex-1">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold">Principal Dashboard</h2>
               <p className="text-base md:text-lg">
@@ -417,6 +417,9 @@ export default function Principal_Dashboard() {
                   day: "numeric",
                 })}
               </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <ProfileMenu />
             </div>
           </div>
 
