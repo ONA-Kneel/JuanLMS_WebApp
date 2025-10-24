@@ -1735,7 +1735,9 @@ export default function Faculty_Chats() {
                                 {msg.fileUrl && (
                                   <div className="mt-2">
                                     {(() => {
-                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                      const fileName = msg.fileUrl.split('/').pop().split('?')[0];
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                      
                                       return isImage ? (
                                         <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
                                           <img
@@ -1750,9 +1752,9 @@ export default function Faculty_Chats() {
                                           href={getFileUrl(msg.fileUrl, API_BASE)}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="text-blue-200 hover:text-blue-100 underline"
+                                          className="text-blue-200 hover:text-blue-100 underline flex items-center gap-2"
                                         >
-                                          📎 File attached
+                                          🔗 File Attachment
                                         </a>
                                       );
                                     })()
@@ -1784,7 +1786,9 @@ export default function Faculty_Chats() {
                                 {msg.fileUrl && (
                                   <div className="mt-2">
                                     {(() => {
-                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                      const fileName = msg.fileUrl.split('/').pop().split('?')[0];
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                      
                                       return isImage ? (
                                         <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
                                           <img
@@ -1799,9 +1803,9 @@ export default function Faculty_Chats() {
                                           href={getFileUrl(msg.fileUrl, API_BASE)}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="text-blue-600 hover:text-blue-800 underline"
+                                          className="text-blue-600 hover:text-blue-800 underline flex items-center gap-2"
                                         >
-                                          📎 File attached
+                                          🔗 File Attachment
                                         </a>
                                       );
                                     })()
@@ -1846,7 +1850,7 @@ export default function Faculty_Chats() {
                         onChange={handleFileSelect}
                         style={{ display: "none" }}
                         multiple
-                        accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
+                        accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv,.ppt,.pptx"
                       />
                       {selectedFiles && selectedFiles.length > 0 && (
                         <div className="flex flex-wrap items-center gap-2">

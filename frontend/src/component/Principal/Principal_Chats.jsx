@@ -1523,9 +1523,9 @@ export default function Principal_Chats() {
                                     href={`${API_BASE}/${msg.fileUrl}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="underline text-xs block mt-1"
+                                    className="underline text-xs block mt-1 flex items-center gap-1"
                                   >
-                                    📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                    🔗 File Attachment
                                   </a>
                                 )}
                               </div>
@@ -1560,9 +1560,9 @@ export default function Principal_Chats() {
                                         href={`${API_BASE}/${msg.fileUrl}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="underline text-xs block mt-1"
+                                        className="underline text-xs block mt-1 flex items-center gap-1"
                                       >
-                                        📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                        🔗 File Attachment
                                       </a>
                                     )}
                                   </div>
@@ -1577,9 +1577,9 @@ export default function Principal_Chats() {
                                       href={`${API_BASE}/${msg.fileUrl}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="underline text-xs block mt-1"
+                                      className="underline text-xs block mt-1 flex items-center gap-1"
                                     >
-                                      📎 {msg.fileUrl.split("-").slice(1).join("-")}
+                                      🔗 File Attachment
                                     </a>
                                   )}
                                 </div>
@@ -1609,7 +1609,7 @@ export default function Principal_Chats() {
                     ref={fileInputRef}
                     style={{ display: "none" }}
                     onChange={handleFileSelect}
-                    accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
+                    accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv,.ppt,.pptx"
                   />
 
                   <img

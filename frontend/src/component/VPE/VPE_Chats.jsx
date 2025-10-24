@@ -1554,9 +1554,11 @@ export default function VPE_Chats() {
                           {msg.message ? (
                             <p className="text-sm">{msg.message}</p>
                           ) : msg.fileUrl ? (
-                            <div className="space-y-2">
+                            <div className="mt-2">
                               {(() => {
-                                const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                const fileName = msg.fileUrl.split('/').pop().split('?')[0];
+                                const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                
                                 return isImage ? (
                                   <a href={getFileUrl(msg.fileUrl, API_BASE)} target="_blank" rel="noopener noreferrer">
                                     <img
@@ -1567,16 +1569,14 @@ export default function VPE_Chats() {
                                     />
                                   </a>
                                 ) : (
-                                  <div className="flex items-center space-x-2">
-                                    <img src={uploadfile} alt="File" className="w-8 h-8" />
-                                    <a
-                                      href={getFileUrl(msg.fileUrl, API_BASE)}
-                                      download
-                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}
-                                    >
-                                      Download File
-                                    </a>
-                                  </div>
+                                  <a
+                                    href={getFileUrl(msg.fileUrl, API_BASE)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current flex items-center gap-2`}
+                                  >
+                                    🔗 File Attachment
+                                  </a>
                                 );
                               })()
                               }
@@ -1612,7 +1612,7 @@ export default function VPE_Chats() {
                       onChange={handleFileSelect}
                       className="hidden"
                       multiple
-                      accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
+                      accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv,.ppt,.pptx"
                     />
                     <input
                       type="text"

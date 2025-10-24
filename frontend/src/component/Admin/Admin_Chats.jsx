@@ -709,36 +709,49 @@ export default function Admin_Chats() {
 
       // 2) Send each selected file as its own message with empty text
       for (const file of (selectedFiles || [])) {
+        console.log('Sending file:', file.name, 'Type:', file.type, 'Size:', file.size);
         const fileForm = new FormData();
         fileForm.append("senderId", currentUserId);
         fileForm.append("receiverId", selectedChat._id);
         fileForm.append("message", "");
         fileForm.append("file", file);
 
-        const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
+        try {
+          const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        const fileMessage = fileRes.data;
-        ctxSocket?.emit("sendMessage", {
-          senderId: currentUserId,
-          receiverId: selectedChat._id,
-          text: fileMessage.message,
-          fileUrl: fileMessage.fileUrl || null,
-        });
+          const fileMessage = fileRes.data;
+          console.log('File sent successfully:', fileMessage);
+          
+          ctxSocket?.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+          });
 
-        setMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
-        }));
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
-        }));
-        bumpChatToTop(selectedChat);
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
+          }));
+          bumpChatToTop(selectedChat);
+        } catch (fileError) {
+          console.error('Error sending file:', fileError);
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'File Send Failed',
+            message: `Failed to send file "${file.name}". ${fileError.response?.data?.error || fileError.message}`
+          });
+        }
       }
 
       setNewMessage("");
@@ -1234,37 +1247,50 @@ export default function Admin_Chats() {
 
       // 2) Send each selected file as its own message with empty text
       for (const file of (selectedFiles || [])) {
+        console.log('Sending group file:', file.name, 'Type:', file.type, 'Size:', file.size);
         const fileForm = new FormData();
         fileForm.append("groupId", selectedChat._id);
         fileForm.append("senderId", currentUserId);
         fileForm.append("message", "");
         fileForm.append("file", file);
 
-        const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
-        const fileMessage = fileRes.data;
-        ctxSocket?.emit("sendGroupMessage", {
-          senderId: currentUserId,
-          groupId: selectedChat._id,
-          text: fileMessage.message,
-          fileUrl: fileMessage.fileUrl || null,
-          senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
-          senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
-          senderLastname: parsedUser ? parsedUser.lastname : "User",
-          senderProfilePic: parsedUser ? parsedUser.profilePic : null,
-        });
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
-        }));
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
-        }));
+        try {
+          const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+          const fileMessage = fileRes.data;
+          console.log('Group file sent successfully:', fileMessage);
+          
+          ctxSocket?.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
+          }));
+        } catch (fileError) {
+          console.error('Error sending group file:', fileError);
+          setValidationModal({
+            isOpen: true,
+            type: 'error',
+            title: 'File Send Failed',
+            message: `Failed to send file "${file.name}" to group. ${fileError.response?.data?.error || fileError.message}`
+          });
+        }
       }
 
       setNewMessage("");
@@ -1657,7 +1683,14 @@ export default function Admin_Chats() {
                             {msg.fileUrl && (
                               <div className="mt-2">
                                 {(() => {
-                                  const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(msg.fileUrl.split('?')[0]);
+                                  const fileName = msg.fileUrl.split('/').pop().split('?')[0];
+                                  const fileExtension = fileName.split('.').pop().toLowerCase();
+                                  const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                  const isExcel = /\.(xlsx|xls)$/i.test(fileName);
+                                  const isPDF = /\.(pdf)$/i.test(fileName);
+                                  const isWord = /\.(doc|docx)$/i.test(fileName);
+                                  const isPowerPoint = /\.(ppt|pptx)$/i.test(fileName);
+                                  
                                   return isImage ? (
                                     <a href={`${API_BASE}/${msg.fileUrl}`} target="_blank" rel="noopener noreferrer">
                                       <img
@@ -1672,9 +1705,21 @@ export default function Admin_Chats() {
                                       href={`${API_BASE}/${msg.fileUrl}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current`}
+                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current flex items-center gap-2`}
                                     >
-                                      📎 Attachment
+                                      {isExcel && "📊"}
+                                      {isPDF && "📄"}
+                                      {isWord && "📝"}
+                                      {isPowerPoint && "📊"}
+                                      {!isExcel && !isPDF && !isWord && !isPowerPoint && "📎"}
+                                      <span>
+                                        {isExcel ? "Excel File" : 
+                                         isPDF ? "PDF Document" :
+                                         isWord ? "Word Document" :
+                                         isPowerPoint ? "PowerPoint" :
+                                         "Attachment"}
+                                      </span>
+                                      <span className="text-xs opacity-75">({fileName})</span>
                                     </a>
                                   );
                                 })()
@@ -1712,7 +1757,7 @@ export default function Admin_Chats() {
                       onChange={handleFileSelect}
                       className="hidden"
                       multiple
-                      accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls"
+                      accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv,.ppt,.pptx"
                     />
                     <input
                       type="text"
