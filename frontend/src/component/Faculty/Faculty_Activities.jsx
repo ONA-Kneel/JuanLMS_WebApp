@@ -451,25 +451,30 @@ export default function Faculty_Activities() {
               })}
             </p>
           </div>
-          <ProfileMenu />
+          <div className="flex items-center gap-4">
+            <ProfileMenu />
+          </div>
         </div>
 
 
-        <ul className="flex flex-wrap border-b border-gray-700 text-xl sm:text-2xl font-medium text-gray-400">
-          {tabs.map((tab) => (
-            <li
-              key={tab.id}
-              className={`me-4 cursor-pointer py-2 px-4 ${
-                activeTab === tab.id
-                  ? "text-black border-b-4 border-blue-500"
-                  : "hover:text-gray-600"
-              }`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </li>
-          ))}
-        </ul>
+        {/* Tabs - brand-consistent with Student_Activities */}
+        <div className="border-b border-[#00418B] mb-2">
+          <div className="flex overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-base sm:text-lg font-medium whitespace-nowrap flex items-center ${
+                  activeTab === tab.id
+                    ? 'border-b-2 border-[#00418B] text-[#00418B]'
+                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-6">
           {activeTab === "activities-quiz" && (
@@ -724,7 +729,7 @@ export default function Faculty_Activities() {
                       return (
                       <div
                         key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
-                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-6 hover:bg-[#002d5a] cursor-pointer transition-colors"
+                        className="bg-[#00418B] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#002d5a] cursor-pointer transition-colors"
                         onClick={() => {
                           if (item.type === 'assignment') {
                             navigate(`/assignment/${item._id || item.id}`);
@@ -969,7 +974,7 @@ export default function Faculty_Activities() {
                       {groupedByDate[dateKey].map((item) => (
                         <div
                           key={`${item.type}-${item._id || item.id}-${item.classInfo?.classCode || 'unknown'}`}
-                          className="bg-[#1e40af] p-4 rounded-xl shadow-lg mb-6 hover:bg-[#1e3a8a] cursor-pointer transition-colors"
+                          className="bg-[#1e40af] p-4 rounded-xl shadow-lg mb-4 hover:bg-[#1e3a8a] cursor-pointer transition-colors"
                           onClick={() => {
                             if (item.type === 'assignment') {
                               navigate(`/assignment/${item._id || item.id}`);

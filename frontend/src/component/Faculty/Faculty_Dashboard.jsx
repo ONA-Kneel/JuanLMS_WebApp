@@ -196,9 +196,9 @@ export default function Faculty_Dashboard() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr md:ml-64">
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden font-poppinsr">
       <Faculty_Navbar />
-      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr">
+      <div className="flex-1 bg-gray-100 p-4 sm:p-6 md:p-10 overflow-auto font-poppinsr md:ml-64">
 
         {/* Suggest change password modal */}
         {showSuggestPw && (
@@ -251,7 +251,7 @@ export default function Faculty_Dashboard() {
         )}
 
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">Faculty Dashboard</h2>
             <p className="text-base md:text-lg">
@@ -274,10 +274,10 @@ export default function Faculty_Dashboard() {
 
 
 
-        {/* Announcements (no KPI cards here) */}
+        {/* Announcements */}
         {announcements.length > 0 && (
           <div className="mb-6">
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+            <div className="bg-white rounded-2xl shadow p-4 md:p-6 border-2 border-[#00418B]">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-lg font-semibold">Announcements</h4>
                 <button
@@ -323,24 +323,23 @@ export default function Faculty_Dashboard() {
           {loading ? (
             <p>Loading...</p>
           ) : classes.length === 0 ? (
-            <p>No classes found.</p>
+            <div className="col-span-full text-center">
+              <p className="text-gray-500 mb-2">No classes found.</p>
+            </div>
           ) : (
             classes.map((cls) => (
               <div
                 key={cls.classID}
-                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
-                style={{ minHeight: "240px", borderRadius: "28px" }}
+                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
+                style={{ minHeight: "240px" }}
                 onClick={() =>
                   (window.location.href = `/faculty_class/${cls.classID}`)
                 }
               >
-                {/* Image section */}
                 <div
-                  className="flex items-center justify-center  bg-gradient-to-r from-blue-900 to-blue-950"
+                  className="flex items-center justify-center bg-gradient-to-r from-blue-900 to-blue-950"
                   style={{
                     height: "160px",
-                    borderTopLeftRadius: "28px",
-                    borderTopRightRadius: "28px",
                   }}
                 >
                   {cls.image ? (
@@ -352,35 +351,16 @@ export default function Faculty_Dashboard() {
                       }
                       alt="Class"
                       className="object-cover w-full h-full"
-                      style={{
-                        maxHeight: "160px",
-                        borderTopLeftRadius: "28px",
-                        borderTopRightRadius: "28px",
-                        borderBottomLeftRadius: 0,
-                        borderBottomRightRadius: 0,
-                      }}
                     />
                   ) : (
                     <span className="text-white text-xl font-bold justify-center align-middle items-center flex"><img src={DEFAULT_IMAGE_URL} alt="Class" className="w-[50%] h-full " /></span>
                   )}
                 </div>
-                {/* Info section */}
-                <div
-                  className="flex items-center justify-between bg-[#00418b] px-6 py-4"
-                  style={{
-                    borderRadius: 0,
-                    borderBottomLeftRadius: "28px",
-                    borderBottomRightRadius: "28px",
-                    marginTop: 0,
-                  }}
-                >
-                  <div>
-                    <div className="text-lg font-bold text-white">
-                      {cls.className || "Subject Name"}
-                    </div>
-                    <div className="text-white text-base">
-                      {cls.section || cls.classCode || "Section Name"}
-                    </div>
+
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4 flex-grow">
+                  <div className="flex flex-col justify-center min-h-[60px]">
+                    <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
+                    <div className="text-white text-base">{cls.section || cls.classCode || 'Section Name'}</div>
                   </div>
                   <img src={arrowRight} alt="Arrow" className="w-6 h-6" />
                 </div>

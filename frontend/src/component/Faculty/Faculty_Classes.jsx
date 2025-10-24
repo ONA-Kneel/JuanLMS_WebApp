@@ -148,11 +148,11 @@ export default function Faculty_Classes() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold mb-1">Classes</h2>
-            <p className="text-base md:text-lg font-medium">
-              <span> </span>{academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} |
-              <span> </span>{currentTerm ? `${currentTerm.termName}` : "Loading..."} |
-              <span> </span>{new Date().toLocaleDateString("en-US", {
+            <h2 className="text-2xl md:text-3xl font-bold">Classes</h2>
+            <p className="text-base md:text-lg">
+              {academicYear ? `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}` : "Loading..."} | 
+              {currentTerm ? `${currentTerm.termName}` : "Loading..."} | 
+              {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
@@ -181,33 +181,36 @@ export default function Faculty_Classes() {
         <h3 className="text-2xl font-semibold mb-4">Your Classes</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {loading ? (
-            <p>Loading...</p>
+            <div className="col-span-full text-center py-8">
+              <p className="text-gray-600">Loading classes...</p>
+            </div>
           ) : classes.length === 0 ? (
-            <p>No classes found.</p>
+            <div className="col-span-full text-center py-8">
+              <p className="text-gray-600">No classes found for the current term.</p>
+            </div>
           ) : (
             classes.map(cls => (
               <div
                 key={cls.classID}
-                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden"
-                style={{ minHeight: '240px', borderRadius: '28px' }}
+                className="relative bg-white rounded-2xl shadow-md flex flex-col justify-baseline cursor-pointer overflow-hidden hover:shadow-lg transition-shadow"
+                style={{ minHeight: '240px' }}
                 onClick={() => navigate(`/faculty_class/${cls.classID}`)}
               >
                 {/* Image section */}
-                <div className="flex items-center justify-center bg-gradient-to-r from-blue-900 to-blue-950" style={{ height: '160px', borderTopLeftRadius: '28px', borderTopRightRadius: '28px' }}>
+                <div className="flex items-center justify-center bg-gradient-to-r from-blue-900 to-blue-950" style={{ height: '160px' }}>
                   {cls.image ? (
                     <img
                       src={getFileUrl(cls.image, API_BASE)}
                       alt="Class"
                       className="object-cover w-full h-full"
-                      style={{ height: '100%', width: '100%', borderTopLeftRadius: '28px', borderTopRightRadius: '28px', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, display: 'block' }}
                     />
                   ) : (
                     <span className="text-white text-xl font-bold justify-center align-middle items-center flex"><img src={DEFAULT_IMAGE_URL} alt="Class" className="w-[50%] h-full " /></span>
                   )}
                 </div>
                 {/* Info section */}
-                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4" style={{ borderBottomLeftRadius: '24px', borderBottomRightRadius: '24px' }}>
-                  <div>
+                <div className="flex items-center justify-between bg-[#00418b] px-6 py-4 flex-grow">
+                  <div className="flex flex-col justify-center min-h-[60px]">
                     <div className="text-lg font-bold text-white">{cls.className || 'Subject Name'}</div>
                     <div className="text-white text-base">{cls.section || cls.classCode || 'Section Name'}</div>
                   </div>
