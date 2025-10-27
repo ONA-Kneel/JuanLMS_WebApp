@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../ProfileMenu";
 import Faculty_Navbar from "./Faculty_Navbar";
 import ValidationModal from "../ValidationModal";
+import * as XLSX from "xlsx";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -24,6 +25,7 @@ export default function FacultyCreateClass() {
   const [classDesc, setClassDesc] = useState("");
   const [viewingStudents, setViewingStudents] = useState(null);
   const [syncingStudents, setSyncingStudents] = useState(false);
+  const [exportingClassList, setExportingClassList] = useState(false);
 
   // Fetch pending classes function
   const fetchPendingClasses = useCallback(async () => {
@@ -106,6 +108,126 @@ export default function FacultyCreateClass() {
   useEffect(() => {
     fetchPendingClasses();
   }, [academicYear, currentTerm, fetchPendingClasses]);
+
+  // Export class list to Excel
+  const exportClassListToExcel = async () => {
+    if (!viewingStudents || exportingClassList) return;
+    
+    try {
+      setExportingClassList(true);
+      const token = localStorage.getItem('token');
+      
+      // Fetch faculty information
+      const facultyRes = await fetch(`${API_BASE}/api/users/${viewingStudents.facultyID}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      let facultyName = 'Unknown Faculty';
+      if (facultyRes.ok) {
+        const faculty = await facultyRes.json();
+        facultyName = `${faculty.firstname || faculty.firstName || ''} ${faculty.lastname || faculty.lastName || ''}`.trim();
+      }
+      
+      // Fetch section information to get track and strand
+      let trackName = 'N/A';
+      let strandName = 'N/A';
+      
+      try {
+        const sectionRes = await fetch(`${API_BASE}/api/terms/${currentTerm._id}/sections`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (sectionRes.ok) {
+          const sections = await sectionRes.json();
+          const sectionData = sections.find(s => s.sectionName === viewingStudents.section);
+          
+          if (sectionData) {
+            trackName = sectionData.trackName || 'N/A';
+            strandName = sectionData.strandName || 'N/A';
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching section data:', err);
+      }
+      
+      // Prepare Excel data
+      const allData = [
+        ['CLASS LIST REPORT'],
+        [''],
+        ['Teacher:', facultyName],
+        ['Track:', trackName],
+        ['Strand:', strandName],
+        ['Section:', viewingStudents.section],
+        ['Subject:', viewingStudents.className],
+        ['Class Code:', viewingStudents.classCode],
+        ['Academic Year:', viewingStudents.academicYear],
+        ['Term:', viewingStudents.termName],
+        [''],
+        ['STUDENT LIST'],
+        [''],
+        ['#', 'Student ID', 'Last Name', 'First Name', 'School ID'],
+      ];
+      
+      // Add student data
+      const students = viewingStudents.members || [];
+      students.forEach((student, index) => {
+        allData.push([
+          index + 1,
+          student.schoolID || student.userID || student._id || 'N/A',
+          student.lastname || student.lastName || 'N/A',
+          student.firstname || student.firstName || 'N/A',
+          student.schoolID || student.schoolId || 'N/A'
+        ]);
+      });
+      
+      allData.push(['']);
+      allData.push(['Total Students:', students.length]);
+      allData.push(['Report Generated:', new Date().toLocaleString()]);
+      
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 5 },   // #
+        { wch: 20 },  // Student ID
+        { wch: 20 },  // Last Name
+        { wch: 20 },  // First Name
+        { wch: 20 }   // School ID
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Class List');
+      
+      // Generate filename
+      const timestamp = new Date().toISOString().split('T')[0];
+      const className = viewingStudents.className.replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `ClassList_${className}_${timestamp}.xlsx`;
+      
+      // Download file
+      XLSX.writeFile(wb, filename);
+      
+      setValidationModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Export Successful',
+        message: `Class list exported to ${filename}`
+      });
+      
+    } catch (error) {
+      console.error('Error exporting class list:', error);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Export Failed',
+        message: 'Failed to export class list. Please try again.'
+      });
+    } finally {
+      setExportingClassList(false);
+    }
+  };
 
   // Handle class confirmation
   const handleConfirmClass = async (classData) => {
@@ -437,10 +559,28 @@ export default function FacultyCreateClass() {
                 </button>
               </div>
               
-              <div className="mb-4 text-sm text-gray-600">
-                <p><strong>Class Code:</strong> {viewingStudents.classCode}</p>
-                <p><strong>Section:</strong> {viewingStudents.section}</p>
-                <p><strong>Total Students:</strong> {viewingStudents.members?.length || 0}</p>
+              <div className="mb-4 flex justify-between items-start">
+                <div className="text-sm text-gray-600">
+                  <p><strong>Class Code:</strong> {viewingStudents.classCode}</p>
+                  <p><strong>Section:</strong> {viewingStudents.section}</p>
+                  <p><strong>Total Students:</strong> {viewingStudents.members?.length || 0}</p>
+                </div>
+                <button
+                  onClick={exportClassListToExcel}
+                  disabled={exportingClassList}
+                  className={`${exportingClassList ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2`}
+                >
+                  {exportingClassList ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      Export Class List
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Student Members Section */}
@@ -505,8 +645,16 @@ export default function FacultyCreateClass() {
           type={validationModal.type}
           title={validationModal.title}
           message={validationModal.message}
-          onConfirm={validationModal.type === 'success' ? () => navigate('/faculty_classes') : undefined}
-          confirmText={validationModal.type === 'success' ? 'Go to Classes' : 'OK'}
+          onConfirm={
+            validationModal.type === 'success' && validationModal.title === 'Class Confirmed'
+              ? () => navigate('/faculty_classes')
+              : undefined
+          }
+          confirmText={
+            validationModal.type === 'success' && validationModal.title === 'Class Confirmed'
+              ? 'Go to Classes'
+              : 'OK'
+          }
         />
       </div>
     </div>
