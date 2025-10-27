@@ -412,9 +412,10 @@ export default function Login() {
 
           <form onSubmit={handleLogin} acceptCharset="UTF-8" className="space-y-4 mt-8">
             <div>
-              <label className="block text-base font-poppinsr mb-2">Email</label>
+              <label htmlFor="email-input" className="block text-base font-poppinsr mb-2">Email</label>
               <input
-                type="text"
+                id="email-input"
+                type="email"
                 required
                 disabled={isLocked || isSubmitting}
                 inputMode="email"
@@ -426,12 +427,14 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-base font-poppinsr mb-2">Password</label>
+              <label htmlFor="password-input" className="block text-base font-poppinsr mb-2">Password</label>
               <div className="relative">
                 <input
+                  id="password-input"
                   type={showPassword ? 'text' : 'password'}
                   required
                   disabled={isLocked || isSubmitting}
+                  autoComplete="current-password"
                   className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-poppinsr text-base border-blue-900 pr-12"
                   placeholder="********"
                 />
@@ -440,7 +443,8 @@ export default function Login() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={isLocked || isSubmitting}
-                  className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-600 hover:text-blue-700 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -461,25 +465,27 @@ export default function Login() {
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center font-poppinsr text-sm">
+              <label htmlFor="remember-me-checkbox" className="flex items-center font-poppinsr text-sm cursor-pointer">
                 <input 
+                  id="remember-me-checkbox"
                   type="checkbox" 
-                  className="mr-2" 
+                  className="mr-2 w-4 h-4" 
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={isLocked || isSubmitting}
                 />
                 Remember Me
               </label>
-              <Link to="/forgot-password" className="text-blue-600 hover:underline font-poppinsr text-sm">
+              <Link to="/forgot-password" className="text-blue-600 hover:underline font-poppinsr text-sm min-h-[44px] flex items-center">
                 Forgot Password?  
               </Link>
             </div>
 
             <button
               type="submit"
-            disabled={isLocked || isSubmitting}
-              className={`w-full p-3 rounded-t-lg transition font-poppinsr text-base ${
+              disabled={isLocked || isSubmitting}
+              aria-label={isLocked ? `Account locked for ${lockoutTime} seconds` : (isSubmitting ? 'Logging in' : 'Login to account')}
+              className={`w-full p-3 rounded-t-lg transition font-poppinsr text-base min-h-[44px] ${
               isLocked || isSubmitting
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-900 text-white hover:bg-blue-950'
@@ -520,7 +526,8 @@ export default function Login() {
             <p className="mb-4">Your account is archived. Please contact the administrator for assistance.</p>
             <button
               onClick={() => setShowArchivedModal(false)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full"
+              aria-label="Close archived account notification"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full min-h-[44px]"
             >
               OK
             </button>

@@ -52,8 +52,9 @@ const Faculty_Navbar = () => {
         <>
             {/* Toggle Button (fixed top-left on mobile) */}
             <button
-                className="md:hidden fixed top-4 left-4 z-40 bg-[#010a51] text-white p-2 rounded-lg"
+                className="md:hidden fixed top-4 left-4 z-40 bg-[#010a51] text-white p-2 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
                 onClick={() => setIsOpen(!isOpen)}
+                aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
             >
                 {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
