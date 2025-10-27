@@ -20,6 +20,10 @@ export default function VPE_Dashboard() {
   // Announcements (inline box)
   const [announcements, setAnnouncements] = useState([]);
 
+  // Faculty activities for preview
+  const [facultyActivities, setFacultyActivities] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+
   // Change password suggest modal
   const [showSuggestPw, setShowSuggestPw] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -102,6 +106,132 @@ export default function VPE_Dashboard() {
     }
     fetchActiveTermForYear();
   }, [academicYear]);
+
+  // Fetch faculty activities for preview
+  useEffect(() => {
+    async function fetchFacultyActivities() {
+      if (!currentTerm || !academicYear) return;
+      
+      setLoadingActivities(true);
+      try {
+        const token = localStorage.getItem("token");
+        const schoolYearName = `${academicYear.schoolYearStart}-${academicYear.schoolYearEnd}`;
+        
+        // Fetch classes
+        const classesRes = await fetch(`${API_BASE}/classes`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const allClasses = classesRes.ok ? await classesRes.json() : [];
+        
+        // Filter classes by term and school year
+        const classes = (allClasses || []).filter(cls => {
+          if (cls?.isArchived) return false;
+          const classYear = cls.schoolYear || cls.academicYear;
+          const classTerm = cls.termName || cls.term;
+          return classYear === schoolYearName && classTerm === currentTerm.termName;
+        });
+
+        // Fetch faculty assignments
+        const facAssignRes = await fetch(`${API_BASE}/api/faculty-assignments`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const allFacultyAssignments = facAssignRes.ok ? await facAssignRes.json() : [];
+        const facultyAssignments = (allFacultyAssignments || []).filter(a => {
+          const matchesYear = a.schoolYear === schoolYearName;
+          const matchesTerm = a.termName === currentTerm.termName;
+          return matchesYear && matchesTerm && a.status !== 'archived';
+        });
+
+        const toObjectIdString = (value) => {
+          if (!value) return "";
+          if (typeof value === "string") return value;
+          if (typeof value === "object") {
+            if (value.$oid) return String(value.$oid);
+            if (value._id) return typeof value._id === "object" && value._id.$oid ? String(value._id.$oid) : String(value._id);
+          }
+          try { return String(value); } catch { return ""; }
+        };
+
+        const enrichedActivities = [];
+        for (const cls of classes || []) {
+          if (cls?.isArchived) continue;
+          const classId = toObjectIdString(cls.classID || cls._id || (cls._id && cls._id.$oid));
+          if (!classId) continue;
+
+          // Find matching faculty assignment
+          const match = facultyAssignments.find(a => {
+            const facIdMatch = toObjectIdString(a.facultyId) === toObjectIdString(cls.facultyID);
+            const sectionMatch = cls.section ? (a.sectionName === cls.section) : true;
+            const trackMatch = cls.trackName ? (a.trackName === cls.trackName) : true;
+            const strandMatch = cls.strandName ? (a.strandName === cls.strandName) : true;
+            return facIdMatch && sectionMatch && trackMatch && strandMatch;
+          });
+
+          try {
+            const [aRes, qRes] = await Promise.all([
+              fetch(`${API_BASE}/assignments?classID=${classId}`, { headers: { "Authorization": `Bearer ${token}` } }),
+              fetch(`${API_BASE}/api/quizzes?classID=${classId}`, { headers: { "Authorization": `Bearer ${token}` } })
+            ]);
+            const assignments = aRes.ok ? await aRes.json() : [];
+            const quizzes = qRes.ok ? await qRes.json() : [];
+
+            assignments.slice(0, 2).forEach(assignment => {
+              const createdById = toObjectIdString(assignment.createdBy || assignment.created_by || assignment.creatorId);
+              enrichedActivities.push({
+                _id: assignment._id,
+                _kind: 'assignment',
+                title: assignment.title,
+                createdBy: createdById,
+                facultyName: match?.facultyName || cls.facultyName || cls.facultyFullName || '',
+                trackName: match?.trackName || cls.trackName || '',
+                strandName: match?.strandName || cls.strandName || '',
+                sectionName: match?.sectionName || cls.section || '',
+                subject: match?.subjectName || cls.subject || '',
+                postAt: assignment.postAt,
+                createdAt: assignment.createdAt,
+                dueDate: assignment.dueDate,
+              });
+            });
+
+            quizzes.slice(0, 2).forEach(quiz => {
+              const createdById = toObjectIdString(quiz.createdBy || quiz.created_by || quiz.creatorId);
+              enrichedActivities.push({
+                _id: quiz._id,
+                _kind: 'quiz',
+                title: quiz.title,
+                createdBy: createdById,
+                facultyName: match?.facultyName || cls.facultyName || cls.facultyFullName || '',
+                trackName: match?.trackName || cls.trackName || '',
+                strandName: match?.strandName || cls.strandName || '',
+                sectionName: match?.sectionName || cls.section || '',
+                subject: match?.subjectName || cls.subject || '',
+                postAt: quiz.postAt,
+                createdAt: quiz.createdAt,
+                dueDate: quiz.dueDate,
+              });
+            });
+          } catch (err) {
+            console.warn("Failed to fetch activities for class", classId, err);
+          }
+        }
+
+        // Sort by createdAt desc and take first 5
+        const sorted = enrichedActivities.sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+          return dateB - dateA;
+        });
+        
+        setFacultyActivities(sorted.slice(0, 5));
+      } catch (err) {
+        console.error("Failed to fetch faculty activities:", err);
+      } finally {
+        setLoadingActivities(false);
+      }
+    }
+
+    fetchFacultyActivities();
+  }, [currentTerm, academicYear]);
 
   /* ------------------------------ helpers ------------------------------ */
   const DISMISSED_KEY = "vpe_dashboard_dismissed_announcements";
@@ -296,9 +426,6 @@ export default function VPE_Dashboard() {
                 })}
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <ProfileMenu />
-            </div>
           </div>
 
           {/* Announcements */}
@@ -345,40 +472,69 @@ export default function VPE_Dashboard() {
           )}
 
           {/* Faculty Report Preview */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-[#00418B]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-gray-800">Faculty Report Preview</h3>
               
             </div>
-            <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm table-fixed">
-              <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="p-3 border w-1/3">Name</th>
-                  <th className="p-3 border w-1/3">Track</th>
-                  <th className="p-3 border w-1/3">Strand</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Sample faculty data - 5 rows for preview */}
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">
-                      {index === 0 && "Test"}
-                      {index === 1 && "Test"}
-                      {index === 2 && "Test"}
-                    </td>
-                    <td className="p-3 border text-gray-900 whitespace-nowrap">
-                      {index % 2 === 0 && "Academic Track"}
-                      {index % 2 === 1 && "TVL Track"}
-                    </td>
-                    <td className="p-3 border text-gray-500">
-                      {index % 2 === 0 && "ABM"}
-                      {index % 3 === 1 && "Cookery"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {loadingActivities ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00418B] mx-auto"></div>
+                <p className="mt-2 text-gray-600 text-sm">Loading activities...</p>
+              </div>
+            ) : facultyActivities.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>No activities found for the current term.</p>
+                <p className="text-sm mt-2">Faculty activities will appear here once assignments and quizzes are created.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border-2 border-[#00418B] rounded">
+                <table className="min-w-full bg-white border-2 border-[#00418B] overflow-hidden text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Faculty Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Activity Title</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Type</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Subject</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facultyActivities.map((activity, index) => (
+                      <tr key={`${activity._id}-${index}`} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
+                        <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">
+                          {activity.facultyName || '-'}
+                        </td>
+                        <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words max-w-xs">
+                          {activity.title || '-'}
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                            activity._kind === 'assignment' 
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                              : 'bg-purple-100 text-purple-700 border border-purple-200'
+                          }`}>
+                            {activity._kind || 'activity'}
+                          </span>
+                        </td>
+                        <td className="p-3 border-b border-[#00418B] text-gray-700 whitespace-nowrap">
+                          {activity.subject || '-'}
+                        </td>
+                        <td className="p-3 border-b border-[#00418B]">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                            activity.postAt && new Date(activity.postAt) <= new Date()
+                              ? 'bg-green-100 text-green-700 border border-green-200'
+                              : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                          }`}>
+                            {activity.postAt && new Date(activity.postAt) <= new Date() ? 'Posted' : 'Pending'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
         {/* Right Side: ProfileMenu and Audit Preview stacked */}
@@ -386,7 +542,7 @@ export default function VPE_Dashboard() {
           <div className="w-full flex justify-end">
             <ProfileMenu />
           </div>
-          <div className="w-full bg-white rounded-2xl shadow p-4 h-fit max-h-96 overflow-y-auto">
+          <div className="w-full bg-white rounded-2xl shadow p-4 h-fit max-h-96 overflow-y-auto  border-2 border-[#00418B]">
             <h3 className="text-lg font-semibold mb-2">Audit Preview</h3>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -415,7 +571,7 @@ export default function VPE_Dashboard() {
           </div>
           
           {/* Academic Calendar */}
-          <div className="w-full bg-white rounded-2xl shadow p-4 flex flex-col" style={{ maxWidth: 400, fontSize: '13px' }}>
+          <div className="w-full bg-white rounded-2xl shadow p-4 flex flex-col border-2 border-[#00418B]" style={{ maxWidth: 400, fontSize: '13px' }}>
             <span className="text-lg font-bold text-gray-800 mb-2">Academic Calendar</span>
             <FullCalendar
               plugins={[dayGridPlugin]}

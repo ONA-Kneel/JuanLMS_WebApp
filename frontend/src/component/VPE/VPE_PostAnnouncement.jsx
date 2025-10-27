@@ -367,11 +367,11 @@ export default function VPE_PostAnnouncement() {
         </div>
 
         {/* Create Announcement Form */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-[#00418B]">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Announcement Title */}
             <div>
-              <label htmlFor="announcementTitle" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="announcementTitle" className="block text-sm font-medium text-gray-700 mb-2 ">
                 Announcement Title *
               </label>
               <div className="relative">
@@ -381,7 +381,7 @@ export default function VPE_PostAnnouncement() {
                   value={announcementTitle}
                   onChange={(e) => setAnnouncementTitle(e.target.value)}
                   maxLength={TITLE_MAX_LENGTH}
-                  className="w-full px-3 py-2 pr-16 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 pr-16 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:border-[#00418B]"
                   placeholder="Enter announcement title"
                   required
                 />
@@ -405,7 +405,7 @@ export default function VPE_PostAnnouncement() {
                   onChange={(e) => setBody(e.target.value)}
                   maxLength={BODY_MAX_LENGTH}
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:border-[#00418B]"
                   placeholder="Enter announcement content"
                   required
                 />
@@ -429,7 +429,7 @@ export default function VPE_PostAnnouncement() {
                     id="everyone"
                     checked={recipients.everyone}
                     onChange={() => handleRecipientChange('everyone')}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-[#00418B] border-gray-300 rounded"
                   />
                   <label htmlFor="everyone" className="ml-2 block text-sm text-gray-900">
                     Everyone
@@ -441,7 +441,7 @@ export default function VPE_PostAnnouncement() {
                     id="principal"
                     checked={recipients.principal}
                     onChange={() => handleRecipientChange('principal')}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-[#00418B] border-gray-300 rounded"
                   />
                   <label htmlFor="principal" className="ml-2 block text-sm text-gray-900">
                     Principal
@@ -453,7 +453,7 @@ export default function VPE_PostAnnouncement() {
                     id="faculty"
                     checked={recipients.faculty}
                     onChange={() => handleRecipientChange('faculty')}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-[#00418B] border-gray-300 rounded"
                   />
                   <label htmlFor="faculty" className="ml-2 block text-sm text-gray-900">
                     Faculty
@@ -465,7 +465,7 @@ export default function VPE_PostAnnouncement() {
                     id="admin"
                     checked={recipients.admin}
                     onChange={() => handleRecipientChange('admin')}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-[#00418B] border-gray-300 rounded"
                   />
                   <label htmlFor="admin" className="ml-2 block text-sm text-gray-900">
                     Admin
@@ -477,7 +477,7 @@ export default function VPE_PostAnnouncement() {
                     id="student"
                     checked={recipients.student}
                     onChange={() => handleRecipientChange('student')}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-[#00418B] border-gray-300 rounded"
                   />
                   <label htmlFor="student" className="ml-2 block text-sm text-gray-900">
                     Student
@@ -505,7 +505,7 @@ export default function VPE_PostAnnouncement() {
                 className={`px-6 py-2 rounded-md text-white font-medium transition-colors ${
                   isSubmitting
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                    : 'bg-[#00418B] hover:bg-[#0055B3] focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:ring-offset-2'
                 }`}
               >
                 {isSubmitting ? 'Posting...' : 'Post Announcement'}
@@ -515,14 +515,14 @@ export default function VPE_PostAnnouncement() {
         </div>
 
         {/* Previous Announcements Section */}
-        <div className="bg-white rounded-lg shadow-md">
+        <div className="bg-white rounded-lg shadow-md border-2 border-[#00418B]">
           <div className="flex flex-col lg:flex-row">
             {/* Left Panel - Announcements List */}
             <div className="lg:w-1/3 border-r border-gray-200">
               <div className="p-4">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Previous Announcements</h3>
-                  <button
+                  {/* <button
                     onClick={async () => {
                       try {
                         const token = localStorage.getItem("token");
@@ -539,10 +539,10 @@ export default function VPE_PostAnnouncement() {
                         alert('Error getting count: ' + error.message);
                       }
                     }}
-                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                    className="text-xs bg-[#00418B] text-white px-2 py-1 rounded hover:bg-blue-600"
                   >
                     Test Count
-                  </button>
+                  </button> */}
                 </div>
                 
                 {/* Search Bar */}
@@ -552,7 +552,7 @@ export default function VPE_PostAnnouncement() {
                     placeholder="Search announcement title..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:border-[#00418B]"
                   />
                 </div>
 
@@ -566,7 +566,7 @@ export default function VPE_PostAnnouncement() {
                     <select
                       value={selectedSchoolYear}
                       onChange={(e) => setSelectedSchoolYear(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:border-[#00418B]"
                     >
                       <option value="">All School Years</option>
                       {schoolYears.map((year) => (
@@ -585,7 +585,7 @@ export default function VPE_PostAnnouncement() {
                     <select
                       value={selectedTerm}
                       onChange={(e) => setSelectedTerm(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00418B] focus:border-[#00418B]"
                       disabled={!selectedSchoolYear}
                     >
                       <option value="">All Terms</option>
@@ -611,7 +611,7 @@ export default function VPE_PostAnnouncement() {
                         onClick={() => setSelectedAnnouncement(announcement)}
                         className={`p-3 rounded-md cursor-pointer transition-colors ${
                           selectedAnnouncement?._id === announcement._id
-                            ? 'bg-blue-50 border-l-4 border-blue-500'
+                            ? 'bg-blue-50 border-l-4 border-[#00418B]'
                             : 'hover:bg-gray-50'
                         }`}
                       >
