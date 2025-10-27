@@ -418,9 +418,6 @@ export default function Principal_Dashboard() {
                 })}
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <ProfileMenu />
-            </div>
           </div>
 
           {/* Announcements (inline box) */}
