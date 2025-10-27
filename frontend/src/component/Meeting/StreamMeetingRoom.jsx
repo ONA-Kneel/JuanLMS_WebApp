@@ -460,13 +460,13 @@ const StreamMeetingRoom = ({
               </div>
               <div className="stream-controls-wrap">
                 <div className="stream-controls flex items-center gap-2">
-                  <button onClick={handleToggleMic} className="px-3 py-2 rounded flex items-center gap-1" title="Mic">
+                  <button onClick={handleToggleMic} className="px-3 py-2 rounded flex items-center gap-1" title="Mic" aria-label={isMicOn ? "Turn off microphone" : "Turn on microphone"}>
                     {isMicOn ? <Mic size={18} /> : <MicOff size={18} />}
                   </button>
-                  <button onClick={handleToggleCamera} className="px-3 py-2 rounded flex items-center gap-1" title="Video">
+                  <button onClick={handleToggleCamera} className="px-3 py-2 rounded flex items-center gap-1" title="Video" aria-label={isCameraOn ? "Turn off camera" : "Turn on camera"}>
                     {isCameraOn ? <VideoIcon size={18} /> : <VideoOff size={18} />}
                   </button>
-                  <button onClick={handleToggleScreenShare} className="px-3 py-2 rounded flex items-center gap-1" title="Screen Share">
+                  <button onClick={handleToggleScreenShare} className="px-3 py-2 rounded flex items-center gap-1" title="Screen Share" aria-label="Share screen">
                     <MonitorUp size={18} />
                   </button>
                   {/* Hidden functional buttons; trigger via custom icons to ensure consistent visuals */}
@@ -474,13 +474,13 @@ const StreamMeetingRoom = ({
                     <CallStatsButton ref={statsButtonRef} title="Stats" />
                     <RecordCallButton ref={recordButtonRef} title="Record" />
                   </div>
-                  <button onClick={() => statsButtonRef.current?.click()} className="px-3 py-2 rounded flex items-center gap-1" title="Statistics">
+                  <button onClick={() => statsButtonRef.current?.click()} className="px-3 py-2 rounded flex items-center gap-1" title="Statistics" aria-label="View call statistics">
                     <BarChart3 size={18} />
                   </button>
-                  <button onClick={() => { recordButtonRef.current?.click(); setIsRecording((v)=>!v); }} className="px-3 py-2 rounded flex items-center gap-1" title="Record">
+                  <button onClick={() => { recordButtonRef.current?.click(); setIsRecording((v)=>!v); }} className="px-3 py-2 rounded flex items-center gap-1" title="Record" aria-label={isRecording ? "Stop recording" : "Start recording"}>
                     {isRecording ? <CircleStop size={18} /> : <Circle size={18} />}
                   </button>
-                  <button onClick={() => setShowConfirmLeave(true)} className="stream-leave-button px-3 py-2 rounded flex items-center gap-1" title="Leave">
+                  <button onClick={() => setShowConfirmLeave(true)} className="stream-leave-button px-3 py-2 rounded flex items-center gap-1" title="Leave" aria-label="Leave meeting">
                     <PhoneOff size={18} />
                   </button>
                 </div>

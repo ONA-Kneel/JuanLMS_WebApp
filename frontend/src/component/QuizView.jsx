@@ -597,6 +597,8 @@ export default function QuizView() {
           className="border-2 border-blue-200 rounded-xl px-4 py-3 w-full mb-6 text-lg"
           value={answers[current] || ''}
           onChange={e => handleChange(current, e.target.value)}
+          aria-label={`Answer for question ${current + 1}`}
+          placeholder="Type your answer here"
         />
       );
     }

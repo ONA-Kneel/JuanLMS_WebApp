@@ -9,14 +9,20 @@ export default defineConfig({
     react()
   ],
   build: {
-    // Ensure the build works in various environments
-    target: 'es2015',
+    // Use modern target for smaller bundles and better performance
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     // Ensure clean builds
     emptyOutDir: true,
     // Generate manifest for cache busting
     manifest: false,
     // Adjust chunk size limit for Vercel deployment
     chunkSizeWarningLimit: 1000,
+    // Optimize CSS loading - keep single CSS file to reduce render-blocking requests
+    cssCodeSplit: false,
+    cssMinify: true,
+    // Use esbuild minification (default, faster than terser)
+    minify: 'esbuild',
+    // Optimize chunk splitting for better performance
     rollupOptions: {
       output: {
         // Ensure consistent module naming with content-based hashing
@@ -26,9 +32,25 @@ export default defineConfig({
           // Use content hash for better cache busting
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
+          // Optimize font file names
+          if (ext === 'ttf' || ext === 'woff' || ext === 'woff2') {
+            return `assets/fonts/[name]-[hash].${ext}`;
+          }
           return `assets/[name]-[hash].${ext}`;
         },
-        manualChunks: undefined
+        // Manual chunks for better caching and parallel loading
+        manualChunks: (id) => {
+          // Separate vendor chunks for better caching
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('axios')) {
+              return 'vendor-axios';
+            }
+            return 'vendor';
+          }
+        }
       }
     }
   },

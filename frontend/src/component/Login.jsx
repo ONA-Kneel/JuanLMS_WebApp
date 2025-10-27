@@ -498,11 +498,11 @@ export default function Login() {
         {/* Right Section (Welcome Message) */}
         <div className="relative w-full md:w-1/2 flex flex-col items-start justify-center p-8 md:p-10 bg-[url('/src/assets/bg-JuanLMS.svg')] bg-cover bg-center text-white">
           <div className="absolute top-5 right-5 md:right-10 ">
-            <img src={logo} className="w-35 md:w-38" alt="JUANLMS Logo" />
+            <img src={logo} className="w-35 md:w-38" alt="JUANLMS Logo" loading="eager" fetchpriority="high" />
           </div>
 
           <div className="absolute top-7 right-10 md:right-35 pr-12">
-            <img src={logo6} className="w-28 md:w-33" alt="SJDDEFI Logo" />
+            <img src={logo6} className="w-28 md:w-33" alt="SJDDEFI Logo" loading="eager" fetchpriority="high" />
           </div>
           <h2 className="text-3xl md:text-4xl font-bold font-poppinsb pt-20">Hello,</h2>
           <h2 className="text-3xl md:text-4xl font-bold font-poppinsb">welcome!</h2>

@@ -7,10 +7,14 @@
     <meta name="theme-color" content="#3b82f6" />
     <meta name="description" content="San Juan de Dios Educational Foundation Learning Management System" />
     <link rel="manifest" href="/manifest.json" />
+    <!-- Preconnect to API for faster connection -->
+    <link rel="preconnect" href="https://juanlms-webapp-server.onrender.com" crossorigin />
+    <link rel="dns-prefetch" href="https://juanlms-webapp-server.onrender.com" />
     <title>JuanLMS</title>
   </head>
   <body>
-    <div id="root"></div>
+    <a href="#root" class="skip-link">Skip to main content</a>
+    <div id="root" role="main"></div>
     <div id="portal"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
