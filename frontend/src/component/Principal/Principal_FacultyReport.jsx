@@ -1648,55 +1648,46 @@ export default function Principal_FacultyReport() {
         </div>
 
         {/* Main Content Area */}
-        <div className="">
+        <div className="bg-white rounded-xl shadow p-4 md:p-6 border-2 border-[#00418B]">
           {/* Tab Navigation */}
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-300">
+          <div className="border-b border-[#00418B] mb-4">
+            <div className="flex overflow-x-auto">
             <button
               onClick={() => setActiveTab('activities')}
-              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
                 activeTab === 'activities'
-                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+                    ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Faculty Activities
             </button>
             <button
               onClick={() => setActiveTab('student-audit')}
-              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
                 activeTab === 'student-audit'
-                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+                    ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Student Activity Audit
             </button>
             <button
               onClick={() => setActiveTab('faculty-logins')}
-              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
                 activeTab === 'faculty-logins'
-                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+                    ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Faculty Last Logins
             </button>
-            {/* <button
-              onClick={() => setActiveTab('ai-analyses')}
-              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
-                activeTab === 'ai-analyses'
-                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
-              }`}
-            >
-              AI Analyses
-            </button> */}
             <button
               onClick={() => setActiveTab('vpe-reports')}
-              className={`px-4 py-2 rounded-t-lg text-sm md:text-base font-medium ${
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
                 activeTab === 'vpe-reports'
-                  ? "bg-white text-blue-900 border border-gray-300 border-b-0"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+                    ? 'border-b-2 border-[#00418B] text-[#00418B]' 
+                    : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               Send Reports to VPE
@@ -1704,7 +1695,7 @@ export default function Principal_FacultyReport() {
           </div>
 
           {/* Tab Content */}
-          <div className="p-6 bg-white ">
+          <div>
             {activeTab === 'activities' && (
               <div>
                 {/* Header Row */}
@@ -1713,119 +1704,7 @@ export default function Principal_FacultyReport() {
             
             
           </div>
-          <div className="flex flex-col md:flex-row gap-3 flex-wrap  md:w-auto">
-              {/* School Year Filter */}
-              <select
-                value={selectedSchoolYear}
-                onChange={(e) => { 
-                  setSelectedSchoolYear(e.target.value); 
-                  setSelectedTerm(""); 
-                  setSelectedTrack(""); 
-                  setSelectedStrand(""); 
-                  setSelectedSection(""); 
-                  setSelectedCourse(""); 
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">All School Years</option>
-                {schoolYears.map(year => (
-                  <option key={year._id} value={`${year.schoolYearStart}-${year.schoolYearEnd}`}>
-                    {year.schoolYearStart}-{year.schoolYearEnd}
-                  </option>
-                ))}
-              </select>
-
-              {/* Term Filter */}
-              <select
-                value={selectedTerm}
-                onChange={(e) => { 
-                  setSelectedTerm(e.target.value); 
-                  setSelectedTrack(""); 
-                  setSelectedStrand(""); 
-                  setSelectedSection(""); 
-                  setSelectedCourse(""); 
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                disabled={!selectedSchoolYear}
-              >
-                <option value="">All Terms</option>
-                {selectedSchoolYear && terms
-                  .filter(term => {
-                    const termSchoolYear = term.schoolYear || term.schoolYearName || term.year;
-                    const matches = termSchoolYear === selectedSchoolYear;
-                    return matches;
-                  })
-                  .map(term => (
-                    <option key={term._id} value={term.termName}>
-                      {term.termName}
-                    </option>
-                  ))}
-              </select>
-
-              {/* Faculty Name Search */}
-              <input
-                type="text"
-                placeholder="Search faculty name..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              
-              {/* Track Filter */}
-              <select
-                value={selectedTrack}
-                onChange={(e) => { setSelectedTrack(e.target.value); setSelectedStrand(""); setSelectedSection(""); setSelectedCourse(""); }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">All Tracks</option>
-                {uniqueTracks.map(track => (
-                  <option key={track} value={track}>{track}</option>
-                ))}
-              </select>
-              
-              {/* Strand Filter */}
-              <select
-                value={selectedStrand}
-                onChange={(e) => { setSelectedStrand(e.target.value); setSelectedSection(""); setSelectedCourse(""); }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">All Strands</option>
-                {uniqueStrands.map(strand => (
-                  <option key={strand} value={strand}>{strand}</option>
-                ))}
-              </select>
-
-              {/* Section Filter */}
-              <select
-                value={selectedSection}
-                onChange={(e) => { setSelectedSection(e.target.value); setSelectedCourse(""); }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">All Sections</option>
-                {uniqueSections.map(section => (
-                  <option key={section} value={section}>{section}</option>
-                ))}
-              </select>
-
-              {/* Course/Subject Filter */}
-              <select
-                value={selectedCourse}
-                onChange={(e) => setSelectedCourse(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">All Courses</option>
-                {uniqueCourses.map(course => (
-                  <option key={course} value={course}>{course}</option>
-                ))}
-              </select>
-              
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-              >
-                Clear Filters
-              </button>
-            </div>
+          
 
 
           {/* Faculty Activities Table */}
@@ -1860,56 +1739,156 @@ export default function Principal_FacultyReport() {
                   {selectedCourse && ` in ${selectedCourse}`}
                 </div>
                 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                <div className="overflow-x-auto border-2 border-[#00418B] rounded">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] overflow-hidden text-sm">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Faculty Name</th>
-                        <th className="p-3 border">Track</th>
-                        <th className="p-3 border">Strand</th>
-                        <th className="p-3 border">Section</th>
-                        <th className="p-3 border">Course</th>
-                        <th className="p-3 border">Activity Title</th>
-                        <th className="p-3 border">Created At</th>
-                        <th className="p-3 border">Posted At</th>
-                        <th className="p-3 border">Due Date</th>
-                        <th className="p-3 border">Points</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Faculty Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Track</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Strand</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Section</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Course</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Activity Title</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Created At</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Posted At</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Due Date</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700 whitespace-nowrap">Points</th>
+                      </tr>
+                      {/* Filter Row */}
+                      <tr className="bg-gray-100">
+                        <td className="p-2 border-b border-[#00418B]">
+              <input
+                type="text"
+                             placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+                        </td>
+                        <td className="p-2 border-b border-[#00418B]">
+              <select
+                value={selectedTrack}
+                onChange={(e) => { setSelectedTrack(e.target.value); setSelectedStrand(""); setSelectedSection(""); setSelectedCourse(""); }}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                             <option value="">All</option>
+                {uniqueTracks.map(track => (
+                  <option key={track} value={track}>{track}</option>
+                ))}
+              </select>
+                        </td>
+                        <td className="p-2 border-b border-[#00418B]">
+              <select
+                value={selectedStrand}
+                onChange={(e) => { setSelectedStrand(e.target.value); setSelectedSection(""); setSelectedCourse(""); }}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                             <option value="">All</option>
+                {uniqueStrands.map(strand => (
+                  <option key={strand} value={strand}>{strand}</option>
+                ))}
+              </select>
+                        </td>
+                        <td className="p-2 border-b border-[#00418B]">
+              <select
+                value={selectedSection}
+                onChange={(e) => { setSelectedSection(e.target.value); setSelectedCourse(""); }}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                             <option value="">All</option>
+                {uniqueSections.map(section => (
+                  <option key={section} value={section}>{section}</option>
+                ))}
+              </select>
+                        </td>
+                        <td className="p-2 border-b border-[#00418B]">
+              <select
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                             <option value="">All</option>
+                {uniqueCourses.map(course => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </select>
+                        </td>
+                        <td className="p-2 border-b border-[#00418B]">
+                           <input
+                             type="text"
+                             placeholder="Search..."
+                             readOnly
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
+                           />
+                         </td>
+                         <td className="p-2 border-b border-[#00418B]">
+                           <input
+                             type="text"
+                             placeholder="Search..."
+                             readOnly
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
+                           />
+                         </td>
+                         <td className="p-2 border-b border-[#00418B]">
+                           <input
+                             type="text"
+                             placeholder="Search..."
+                             readOnly
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
+                           />
+                         </td>
+                         <td className="p-2 border-b border-[#00418B]">
+                           <input
+                             type="text"
+                             placeholder="Search..."
+                             readOnly
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
+                           />
+                         </td>
+                         <td className="p-2 border-b border-[#00418B]">
+                           <input
+                             type="text"
+                             placeholder="Search..."
+                             readOnly
+                             className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
+                           />
+                         </td>
                       </tr>
                     </thead>
                     <tbody>
                       {currentActivities.map((activity, index) => (
-                        <tr key={`${activity._id}-${index}`} className="hover:bg-gray-50">
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                        <tr key={`${activity._id}-${index}`} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">
                             {activity.facultyName}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words">
                             {activity.trackName}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words">
                             {activity.strandName}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words">
                             {activity.sectionName}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words">
                             {activity.subject}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-normal break-words">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words">
                             {activity.title}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap text-xs">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words text-xs">
                             {activity.createdAt ? new Date(activity.createdAt).toLocaleString("en-US") : '-'}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap text-xs">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words text-xs">
                             {activity.postAt ? new Date(activity.postAt).toLocaleString("en-US") : '-'}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap text-xs">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-normal break-words text-xs">
                             {activity.dueDate ? new Date(activity.dueDate).toLocaleDateString("en-US") : '-'}
                           </td>
-                          <td className="p-3 border text-gray-900 whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">
                             <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
                               activity.postAt && new Date(activity.postAt) <= new Date()
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                ? 'bg-green-100 text-green-700 border border-green-200'
                                 : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                             }`}>
                               {activity.postAt && new Date(activity.postAt) <= new Date() ? 'Posted' : 'Pending'}
@@ -1923,41 +1902,22 @@ export default function Principal_FacultyReport() {
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-700">
-                      Showing {startIndex + 1} to {Math.min(endIndex, filteredActivities.length)} of {filteredActivities.length} entries
-                    </div>
-                    <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-center mt-4 space-x-4">
                       <button
                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                         disabled={currentPage === 1}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      className="px-4 py-2 text-sm border rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Previous
                       </button>
-                      
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`px-3 py-1 text-sm border rounded ${
-                            currentPage === pageNum
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      ))}
-                      
+                    <span className="text-sm text-gray-700">Page {currentPage} of {totalPages}</span>
                       <button
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                         disabled={currentPage === totalPages}
-                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      className="px-4 py-2 text-sm border rounded bg-[#00418B] text-white hover:bg-[#003166] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         Next
                       </button>
-                    </div>
                   </div>
                 )}
               </>
@@ -1980,6 +1940,8 @@ export default function Principal_FacultyReport() {
               const [selectedActivityId, setSelectedActivityId] = useState("all");
               const [statusFilter, setStatusFilter] = useState("not_viewed"); // default focus
               const [studentSearch, setStudentSearch] = useState("");
+              const [currentAuditPage, setCurrentAuditPage] = useState(1);
+              const AUDIT_PER_PAGE = 10;
 
               // Get unique sections and activities from audit data
               const sections = ["All Sections", ...new Set(auditData.map(item => item.sectionName))];
@@ -2014,6 +1976,17 @@ export default function Principal_FacultyReport() {
                 const inSearch = studentSearch.trim() === "" || item.studentName.toLowerCase().includes(studentSearch.trim().toLowerCase());
                 return inSection && inActivity && inStatus && inSearch;
               });
+
+              // Pagination for audit data
+              const totalAuditPages = Math.ceil(filteredRows.length / AUDIT_PER_PAGE);
+              const startAuditIndex = (currentAuditPage - 1) * AUDIT_PER_PAGE;
+              const endAuditIndex = startAuditIndex + AUDIT_PER_PAGE;
+              const paginatedAuditRows = filteredRows.slice(startAuditIndex, endAuditIndex);
+
+              // Reset to page 1 when filters change
+              useEffect(() => {
+                setCurrentAuditPage(1);
+              }, [selectedSection, selectedActivityId, statusFilter, studentSearch]);
 
               const notViewedCount = filteredRows.filter(item => item.status === "not_viewed").length;
               const missedCount = filteredRows.filter(item => item.status === "missed").length;
@@ -2212,33 +2185,33 @@ export default function Principal_FacultyReport() {
                   </div>
 
                   {/* Table */}
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                  <div className="overflow-x-auto border-2 border-[#00418B]">
+                    <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                       <thead>
                         <tr className="bg-gray-50 text-left">
-                          <th className="p-3 border-b font-semibold text-gray-700">Student Name</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Section</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Activity</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Faculty</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Type</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Due Date</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Status</th>
-                          <th className="p-3 border-b font-semibold text-gray-700">Last Viewed</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Student Name</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Section</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Activity</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Faculty</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Type</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Due Date</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                          <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Last Viewed</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredRows.length === 0 ? (
+                        {paginatedAuditRows.length === 0 ? (
                           <tr>
                             <td className="p-4 text-center text-gray-500" colSpan={8}>No results for current filters.</td>
                           </tr>
                         ) : (
-                          filteredRows.map((item) => (
-                            <tr key={`${item.activityId}-${item.studentId}`} className="odd:bg-white even:bg-gray-50">
-                              <td className="p-3 border-b">{item.studentName}</td>
-                              <td className="p-3 border-b">{item.sectionName}</td>
-                              <td className="p-3 border-b">{item.activityTitle}</td>
-                              <td className="p-3 border-b">{item.facultyName || 'Current User'}</td>
-                              <td className="p-3 border-b">
+                          paginatedAuditRows.map((item, index) => (
+                            <tr key={`${item.activityId}-${item.studentId}`} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
+                              <td className="p-3 border-b border-[#00418B]">{item.studentName}</td>
+                              <td className="p-3 border-b border-[#00418B]">{item.sectionName}</td>
+                              <td className="p-3 border-b border-[#00418B]">{item.activityTitle}</td>
+                              <td className="p-3 border-b border-[#00418B]">{item.facultyName || 'Current User'}</td>
+                              <td className="p-3 border-b border-[#00418B]">
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
                                   item.activityType === 'assignment' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                                   'bg-purple-100 text-purple-700 border border-purple-200'
@@ -2246,23 +2219,44 @@ export default function Principal_FacultyReport() {
                                   {item.activityType}
                                 </span>
                               </td>
-                              <td className="p-3 border-b">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : '-'}</td>
-                              <td className="p-3 border-b">
+                              <td className="p-3 border-b border-[#00418B]">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-US") : '-'}</td>
+                              <td className="p-3 border-b border-[#00418B]">
                                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
                                   item.status === 'not_viewed' ? 'bg-red-100 text-red-700 border border-red-200' :
                                   item.status === 'missed' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                  'bg-blue-100 text-blue-700 border border-blue-200'
+                                  'bg-green-100 text-green-700 border border-green-200'
                                 }`}>
                                   {item.status.replace('_', ' ')}
                                 </span>
                               </td>
-                              <td className="p-3 border-b">{item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : '-'}</td>
+                              <td className="p-3 border-b border-[#00418B]">{item.lastViewedAt ? new Date(item.lastViewedAt).toLocaleString() : '-'}</td>
                             </tr>
                           ))
                         )}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination Controls */}
+                  {totalAuditPages > 1 && (
+                    <div className="flex items-center justify-center mt-4 space-x-4">
+                      <button
+                        onClick={() => setCurrentAuditPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentAuditPage === 1}
+                        className="px-4 py-2 text-sm border rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-700">Page {currentAuditPage} of {totalAuditPages}</span>
+                      <button
+                        onClick={() => setCurrentAuditPage(prev => Math.min(prev + 1, totalAuditPages))}
+                        disabled={currentAuditPage === totalAuditPages}
+                        className="px-4 py-2 text-sm border rounded bg-[#00418B] text-white hover:bg-[#003166] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
 
                   {/* Note */}
                   <p className="mt-4 text-xs text-gray-500">
@@ -2316,21 +2310,21 @@ export default function Principal_FacultyReport() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+              <div className="overflow-x-auto border-2 border-[#00418B]">
+                <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-left">
-                      <th className="p-3 border-b font-semibold text-gray-700">Faculty Name</th>
-                      <th className="p-3 border-b font-semibold text-gray-700">Role</th>
-                      <th className="p-3 border-b font-semibold text-gray-700">Last Login</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Faculty Name</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Role</th>
+                      <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Last Login</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedFacultyLogins.map((log) => (
-                      <tr key={log._id} className={getRowColor(log.lastLogin)}>
-                        <td className="p-3 border-b text-gray-900 whitespace-nowrap">{log.userName}</td>
-                        <td className="p-3 border-b text-gray-700 whitespace-nowrap">{log.userRole}</td>
-                        <td className="p-3 border-b text-gray-500 whitespace-nowrap">{formatDate(log.lastLogin)}</td>
+                    {paginatedFacultyLogins.map((log, index) => (
+                      <tr key={log._id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} ${getRowColor(log.lastLogin)} transition`}>
+                        <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">{log.userName}</td>
+                        <td className="p-3 border-b border-[#00418B] text-gray-700 whitespace-nowrap">{log.userRole}</td>
+                        <td className="p-3 border-b border-[#00418B] text-gray-500 whitespace-nowrap">{formatDate(log.lastLogin)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2339,23 +2333,19 @@ export default function Principal_FacultyReport() {
               
               {/* Pagination controls */}
               {totalFacultyLoginsPages > 1 && (
-                <div className="flex justify-center items-center gap-2 mt-4">
+                <div className="flex items-center justify-center mt-4 space-x-4">
                   <button
-                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                     onClick={() => setFacultyLoginsPage((p) => Math.max(1, p - 1))}
                     disabled={facultyLoginsPage === 1}
+                    className="px-4 py-2 text-sm border rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Previous
                   </button>
-                  
-                  <span className="text-sm text-gray-700">
-                    Page {facultyLoginsPage} of {totalFacultyLoginsPages}
-                  </span>
-                  
+                  <span className="text-sm text-gray-700">Page {facultyLoginsPage} of {totalFacultyLoginsPages}</span>
                   <button
-                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                     onClick={() => setFacultyLoginsPage((p) => Math.min(totalFacultyLoginsPages, p + 1))}
                     disabled={facultyLoginsPage === totalFacultyLoginsPages}
+                    className="px-4 py-2 text-sm border rounded bg-[#00418B] text-white hover:bg-[#003166] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
                   </button>
@@ -2475,41 +2465,41 @@ export default function Principal_FacultyReport() {
                   <p className="text-sm text-gray-500 mt-2">Click "Send New Report" to send your first report.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border rounded-lg overflow-hidden text-sm">
+                <div className="overflow-x-auto border-2 border-[#00418B]">
+                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                     <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border">Sent Date</th>
-                        <th className="p-3 border">School Year</th>
-                        <th className="p-3 border">Term</th>
-                        <th className="p-3 border">Report Name</th>
-                        <th className="p-3 border">Message</th>
-                        <th className="p-3 border">Status</th>
-                        <th className="p-3 border">Actions</th>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Sent Date</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">School Year</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Term</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Report Name</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Message</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sentReports.map(report => (
-                        <tr key={report.id} className="hover:bg-gray-50">
-                          <td className="p-3 border whitespace-nowrap">
+                      {sentReports.map((report, index) => (
+                        <tr key={report.id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
                             {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
                           </td>
-                          <td className="p-3 border whitespace-nowrap">{report.schoolYear}</td>
-                          <td className="p-3 border whitespace-nowrap">{report.termName}</td>
-                          <td className="p-3 border whitespace-nowrap">{report.reportName}</td>
-                          <td className="p-3 border whitespace-normal max-w-xs truncate">
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.schoolYear}</td>
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.termName}</td>
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.reportName}</td>
+                          <td className="p-3 border-b border-[#00418B] whitespace-normal max-w-xs truncate">
                             {report.message || '-'}
                           </td>
-                          <td className="p-3 border whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
                             <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                              report.status === 'sent' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                              report.status === 'delivered' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                              'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                              report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                              report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                              'bg-gray-100 text-gray-700 border border-gray-200'
                             }`}>
                               {report.status}
                             </span>
                           </td>
-                          <td className="p-3 border whitespace-nowrap">
+                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
                             <button 
                               onClick={async () => {
                                 try {
@@ -2848,6 +2838,7 @@ export default function Principal_FacultyReport() {
           </div>
         </div>
       )}
+          </div>
     </div>
   );
 }

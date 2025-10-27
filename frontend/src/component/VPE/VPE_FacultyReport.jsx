@@ -1568,46 +1568,46 @@ export default function VPE_FacultyReport() {
           {/* Tab Navigation */}
           <div className="border-b border-[#00418B] mb-4">
             <div className="flex overflow-x-auto">
-              <button
-                onClick={() => setActiveTab('activities')}
+            <button
+              onClick={() => setActiveTab('activities')}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
-                  activeTab === 'activities'
+                activeTab === 'activities'
                     ? 'border-b-2 border-[#00418B] text-[#00418B]' 
                     : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Faculty Activities
-              </button>
-              <button
-                onClick={() => setActiveTab('student-audit')}
+              }`}
+            >
+              Faculty Activities
+            </button>
+            <button
+              onClick={() => setActiveTab('student-audit')}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
-                  activeTab === 'student-audit'
+                activeTab === 'student-audit'
                     ? 'border-b-2 border-[#00418B] text-[#00418B]' 
                     : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Student Activity Audit
-              </button>
-              <button
-                onClick={() => setActiveTab('faculty-logins')}
+              }`}
+            >
+              Student Activity Audit
+            </button>
+            <button
+              onClick={() => setActiveTab('faculty-logins')}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
-                  activeTab === 'faculty-logins'
+                activeTab === 'faculty-logins'
                     ? 'border-b-2 border-[#00418B] text-[#00418B]' 
                     : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Faculty Last Logins
-              </button>
-              <button
-                onClick={() => setActiveTab('vpe-reports')}
+              }`}
+            >
+              Faculty Last Logins
+            </button>
+            <button
+              onClick={() => setActiveTab('vpe-reports')}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center ${
-                  activeTab === 'vpe-reports'
+                activeTab === 'vpe-reports'
                     ? 'border-b-2 border-[#00418B] text-[#00418B]' 
                     : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Received Reports
-              </button>
+              }`}
+            >
+              Received Reports
+            </button>
             </div>
           </div>
 
@@ -1657,8 +1657,8 @@ export default function VPE_FacultyReport() {
                   {selectedStrand && ` in ${selectedStrand}`}
                   {selectedSection && ` in ${selectedSection}`}
                   {selectedCourse && ` in ${selectedCourse}`}
-                </div>
-                
+          </div>
+
                  <div className="overflow-x-auto border-2 border-[#00418B]">
                    <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                      <thead>
@@ -1677,61 +1677,61 @@ export default function VPE_FacultyReport() {
                        {/* Filter Row */}
                        <tr className="bg-gray-100">
                          <td className="p-2 border-b border-[#00418B]">
-                           <input
-                             type="text"
+              <input
+                type="text"
                              placeholder="Search..."
-                             value={searchTerm}
-                             onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           />
+              />
                          </td>
                          <td className="p-2 border-b border-[#00418B]">
-                           <select
-                             value={selectedTrack}
-                             onChange={(e) => { setSelectedTrack(e.target.value); setSelectedStrand(""); setSelectedSection(""); setSelectedCourse(""); }}
+              <select
+                value={selectedTrack}
+                onChange={(e) => { setSelectedTrack(e.target.value); setSelectedStrand(""); setSelectedSection(""); setSelectedCourse(""); }}
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           >
+              >
                              <option value="">All</option>
-                             {uniqueTracks.map(track => (
-                               <option key={track} value={track}>{track}</option>
-                             ))}
-                           </select>
+                {uniqueTracks.map(track => (
+                  <option key={track} value={track}>{track}</option>
+                ))}
+              </select>
                          </td>
                          <td className="p-2 border-b border-[#00418B]">
-                           <select
-                             value={selectedStrand}
-                             onChange={(e) => { setSelectedStrand(e.target.value); setSelectedSection(""); setSelectedCourse(""); }}
+              <select
+                value={selectedStrand}
+                onChange={(e) => { setSelectedStrand(e.target.value); setSelectedSection(""); setSelectedCourse(""); }}
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           >
+              >
                              <option value="">All</option>
-                             {uniqueStrands.map(strand => (
-                               <option key={strand} value={strand}>{strand}</option>
-                             ))}
-                           </select>
+                {uniqueStrands.map(strand => (
+                  <option key={strand} value={strand}>{strand}</option>
+                ))}
+              </select>
                          </td>
                          <td className="p-2 border-b border-[#00418B]">
-                           <select
-                             value={selectedSection}
-                             onChange={(e) => { setSelectedSection(e.target.value); setSelectedCourse(""); }}
+              <select
+                value={selectedSection}
+                onChange={(e) => { setSelectedSection(e.target.value); setSelectedCourse(""); }}
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           >
+              >
                              <option value="">All</option>
-                             {uniqueSections.map(section => (
-                               <option key={section} value={section}>{section}</option>
-                             ))}
-                           </select>
+                {uniqueSections.map(section => (
+                  <option key={section} value={section}>{section}</option>
+                ))}
+              </select>
                          </td>
                          <td className="p-2 border-b border-[#00418B]">
-                           <select
-                             value={selectedCourse}
-                             onChange={(e) => setSelectedCourse(e.target.value)}
+              <select
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                           >
+              >
                              <option value="">All</option>
-                             {uniqueCourses.map(course => (
-                               <option key={course} value={course}>{course}</option>
-                             ))}
-                           </select>
+                {uniqueCourses.map(course => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </select>
                          </td>
                          <td className="p-2 border-b border-[#00418B]">
                            <input
@@ -1773,10 +1773,10 @@ export default function VPE_FacultyReport() {
                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 cursor-not-allowed"
                            />
                          </td>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {currentActivities.map((activity, index) => (
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentActivities.map((activity, index) => (
                          <tr key={`${activity._id}-${index}`} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
                            <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">
                             {activity.facultyName}
@@ -1823,21 +1823,21 @@ export default function VPE_FacultyReport() {
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-center mt-4 space-x-4">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
                       className="px-4 py-2 text-sm border rounded bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Previous
-                    </button>
+                      >
+                        Previous
+                      </button>
                     <span className="text-sm text-gray-700">Page {currentPage} of {totalPages}</span>
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
                       className="px-4 py-2 text-sm border rounded bg-[#00418B] text-white hover:bg-[#003166] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                    </button>
+                      >
+                        Next
+                      </button>
                   </div>
                 )}
               </>
@@ -2332,7 +2332,7 @@ export default function VPE_FacultyReport() {
                         <>
                           <div className="overflow-x-auto border-2 border-[#00418B]">
                             <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
-                              <thead>
+                      <thead>
                                 <tr className="bg-gray-50 text-left">
                                   <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Received Date</th>
                                   <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">From Principal</th>
@@ -2342,30 +2342,30 @@ export default function VPE_FacultyReport() {
                                   <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Message</th>
                                   <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
                                   <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody>
+                        </tr>
+                      </thead>
+                      <tbody>
                                 {paginatedReports.map((report, index) => (
                                   <tr key={report.id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
-                                      {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
-                                    </td>
+                              {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
+                            </td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.sentBy}</td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.schoolYear}</td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.termName}</td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.reportName}</td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-normal max-w-xs truncate">
-                                      {report.message || '-'}
-                                    </td>
+                              {report.message || '-'}
+                            </td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
-                                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                                        report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                        report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
-                                        'bg-gray-100 text-gray-700 border border-gray-200'
-                                      }`}>
-                                        {report.status}
-                                      </span>
-                                    </td>
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                'bg-gray-100 text-gray-700 border border-gray-200'
+                              }`}>
+                                {report.status}
+                              </span>
+                            </td>
                                     <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
                             <button 
                               onClick={async () => {
@@ -2442,7 +2442,7 @@ export default function VPE_FacultyReport() {
                       >
                         Next
                       </button>
-                    </div>
+                  </div>
                   )}
                         </>
                       );
