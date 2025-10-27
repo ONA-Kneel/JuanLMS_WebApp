@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "cp .htaccess dist/ || copy .htaccess dist\\",
+    "postbuild": "node -e \"require('fs').copyFileSync('.htaccess', 'dist/.htaccess')\"",
     "build:clean": "rmdir /s /q dist 2>nul & npm run build",
     "build:deploy": "node clear-cache-and-build.js",
     "preview": "vite preview",

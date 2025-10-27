@@ -1,11 +1,8 @@
-@ -1,86 +1,79 @@
-<IfModule mod_rewrite.c>
+﻿<IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
     
-    # Handle client-side routing for all new routes
-    # This ensures all React Router routes work properly
-    # BUT exclude static assets from being rewritten to index.html
+    # Handle client-side routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} !^/assets/
@@ -13,107 +10,43 @@
     RewriteRule ^(.*)$ /index.html [L]
 </IfModule>
 
-# Enable CORS for API calls
-Header always set Access-Control-Allow-Origin "*"
-Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-
-# Set proper MIME types for static assets
-<IfModule mod_mime.c>
-    AddType text/css .css
-    AddType application/javascript .js
-    AddType application/json .json
-    AddType image/svg+xml .svg
-    AddType font/woff .woff
-    AddType font/woff2 .woff2
-    AddType application/font-ttf .ttf
-    AddType application/font-otf .otf
-</IfModule>
-
-# Cache control for HTML files only (allow caching of static assets)
+# Cache control headers - CRITICAL for performance
 <IfModule mod_headers.c>
-    # Only apply no-cache to HTML files
+    # HTML files - no cache
     <FilesMatch "\.(html|htm)$">
         Header set Cache-Control "no-cache, no-store, must-revalidate"
-        Header set Pragma "no-cache"
-        Header set Expires "0"
     </FilesMatch>
     
-    # Set proper content type for CSS and JS files
+    # CSS and JS files - 1 year cache
     <FilesMatch "\.css$">
-        Header set Content-Type "text/css"
+        Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
     
     <FilesMatch "\.js$">
-        Header set Content-Type "application/javascript"
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    
+    # FONTS - CRITICAL: Set 1 year cache
+    <FilesMatch "\.(ttf|otf|woff|woff2|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+        Header set Access-Control-Allow-Origin "*"
+    </FilesMatch>
+    
+    # Images - 1 year cache
+    <FilesMatch "\.(png|jpg|jpeg|gif|svg|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
 </IfModule>
 
-# Handle OPTIONS preflight requests
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Security headers for better protection (balanced for functionality)
-Header always set X-Content-Type-Options "nosniff"
-Header always set X-Frame-Options "SAMEORIGIN"
-Header always set X-XSS-Protection "1; mode=block"
-Header always set Referrer-Policy "strict-origin-when-cross-origin"
-
-# Strict-Transport-Security (HSTS) - Only for HTTPS
-Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" env=HTTPS
-
-# Permissions-Policy - Allow camera/microphone for video meetings, restrict other features
-Header always set Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=(), interest-cohort=(), accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), bluetooth=(), clipboard-read=(), clipboard-write=(), device-memory=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), gamepad=(), gyroscope=(), keyboard-map=(), magnetometer=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), speaker-selection=(), storage-access=(), sync-xhr=(), unoptimized-images=(), unsized-media=(), usb=(), vertical-scroll=(), vibrate=(), wake-lock=(), web-share=(), xr-spatial-tracking=()"
-
-# Cache static assets with longer expiration for better performance
+# Expires headers (backup)
 <IfModule mod_expires.c>
     ExpiresActive on
-    
-    # CSS and JavaScript files (shorter cache for auth-sensitive apps)
-    ExpiresByType text/css "access plus 1 hour"
-    ExpiresByType application/javascript "access plus 1 hour"
-    ExpiresByType application/x-javascript "access plus 1 hour"
-    
-    # Images
-    ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/jpg "access plus 1 year"
-    ExpiresByType image/jpeg "access plus 1 year"
-    ExpiresByType image/gif "access plus 1 year"
-    ExpiresByType image/svg+xml "access plus 1 year"
-    ExpiresByType image/webp "access plus 1 year"
-    
-    # Fonts
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
     ExpiresByType font/ttf "access plus 1 year"
-    ExpiresByType font/otf "access plus 1 year"
     ExpiresByType font/woff "access plus 1 year"
     ExpiresByType font/woff2 "access plus 1 year"
-    
-    # HTML files (shorter cache for dynamic content)
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
     ExpiresByType text/html "access plus 1 hour"
-</IfModule>
-
-# Compress text files for better performance
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/plain
-    AddOutputFilterByType DEFLATE text/html
-    AddOutputFilterByType DEFLATE text/xml
-    AddOutputFilterByType DEFLATE text/css
-    AddOutputFilterByType DEFLATE application/xml
-    AddOutputFilterByType DEFLATE application/xhtml+xml
-    AddOutputFilterByType DEFLATE application/rss+xml
-    AddOutputFilterByType DEFLATE application/javascript
-    AddOutputFilterByType DEFLATE application/x-javascript
-    AddOutputFilterByType DEFLATE application/json
-    AddOutputFilterByType DEFLATE font/ttf
-    AddOutputFilterByType DEFLATE font/otf
-    AddOutputFilterByType DEFLATE font/woff
-    AddOutputFilterByType DEFLATE font/woff2
-</IfModule>
-
-# Prevent access to sensitive files using mod_rewrite
-RewriteRule \.(env|htaccess|htpasswd|ini|log|sh|sql|conf|bak|backup|old|tmp|temp)$ - [F,L]
-
-# Enable Keep-Alive for better performance
-<IfModule mod_headers.c>
-    Header set Connection keep-alive
 </IfModule>
