@@ -117,15 +117,39 @@ export default function FacultyCreateClass() {
       setExportingClassList(true);
       const token = localStorage.getItem('token');
       
-      // Fetch faculty information
-      const facultyRes = await fetch(`${API_BASE}/api/users/${viewingStudents.facultyID}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
+      // Get faculty name from localStorage user data
       let facultyName = 'Unknown Faculty';
-      if (facultyRes.ok) {
-        const faculty = await facultyRes.json();
-        facultyName = `${faculty.firstname || faculty.firstName || ''} ${faculty.lastname || faculty.lastName || ''}`.trim();
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        // Check multiple possible field names for the name
+        if (userData.name && userData.name.trim() !== '' && userData.name !== 'null') {
+          facultyName = userData.name.trim();
+        } else if (userData.firstname || userData.lastname) {
+          facultyName = `${userData.firstname || ''} ${userData.lastname || ''}`.trim();
+        } else if (userData.firstName || userData.lastName) {
+          facultyName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+        } else if (userData._id) {
+          // Fetch faculty information from API as fallback
+          const facultyRes = await fetch(`${API_BASE}/users/${userData._id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (facultyRes.ok) {
+            const faculty = await facultyRes.json();
+            // Try to construct name from firstname and lastname
+            const constructedName = `${faculty.firstname || faculty.firstName || ''} ${faculty.lastname || faculty.lastName || ''}`.trim();
+            if (constructedName) {
+              facultyName = constructedName;
+            } else if (faculty.name) {
+              facultyName = faculty.name;
+            }
+          }
+        }
+        
+        console.log('Faculty name to export:', facultyName);
+      } catch (err) {
+        console.error('Error fetching faculty info:', err);
       }
       
       // Fetch section information to get track and strand
@@ -150,22 +174,32 @@ export default function FacultyCreateClass() {
         console.error('Error fetching section data:', err);
       }
       
-      // Prepare Excel data
+      // Prepare Excel data - School Information
       const allData = [
-        ['CLASS LIST REPORT'],
+        ['SAN JUAN DE DIOS EDUCATIONAL FOUNDATION, INC.'],
+        ['2772-2774 Roxas Boulevard, Pasay City 1300 Philippines'],
+        ['PAASCU Accredited - COLLEGE'],
         [''],
-        ['Teacher:', facultyName],
+        [''],
+        [''],
+        ['TRACKS DETAILS'],
+        [`Generated on: ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`],
+        [`Academic Year: ${viewingStudents.academicYear}`],
+        [`Term: ${viewingStudents.termName}`],
+        [''],
+        [''],
+        ['CLASS DETAILS'],
+        [''],
+        ['Faculty:', facultyName],
         ['Track:', trackName],
         ['Strand:', strandName],
         ['Section:', viewingStudents.section],
         ['Subject:', viewingStudents.className],
         ['Class Code:', viewingStudents.classCode],
-        ['Academic Year:', viewingStudents.academicYear],
-        ['Term:', viewingStudents.termName],
         [''],
         ['STUDENT LIST'],
         [''],
-        ['#', 'Student ID', 'Last Name', 'First Name', 'School ID'],
+        ['#', 'Student ID', 'Last Name', 'First Name'],
       ];
       
       // Add student data
@@ -175,14 +209,12 @@ export default function FacultyCreateClass() {
           index + 1,
           student.schoolID || student.userID || student._id || 'N/A',
           student.lastname || student.lastName || 'N/A',
-          student.firstname || student.firstName || 'N/A',
-          student.schoolID || student.schoolId || 'N/A'
+          student.firstname || student.firstName || 'N/A'
         ]);
       });
       
       allData.push(['']);
       allData.push(['Total Students:', students.length]);
-      allData.push(['Report Generated:', new Date().toLocaleString()]);
       
       // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
@@ -192,9 +224,8 @@ export default function FacultyCreateClass() {
       const colWidths = [
         { wch: 5 },   // #
         { wch: 20 },  // Student ID
-        { wch: 20 },  // Last Name
-        { wch: 20 },  // First Name
-        { wch: 20 }   // School ID
+        { wch: 25 },  // Last Name
+        { wch: 25 }   // First Name
       ];
       ws['!cols'] = colWidths;
       

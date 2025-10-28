@@ -404,7 +404,7 @@ export default function Login() {
   // --- RENDER ---
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 inset-shadow-black px-4">
-      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[30rem] lg:w-[120rem]">
+      <div className="w-full max-w-4xl bg-white shadow-lg flex flex-col md:flex-row h-auto md:h-[32rem] lg:w-[120rem]">
 
         {/* Left Section (Login Form) */}
         <div className="w-full md:w-1/2 p-8 md:p-12">
