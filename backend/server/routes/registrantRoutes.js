@@ -102,7 +102,18 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { date, status, page = 1, limit = 10 } = req.query;
     let filter = {};
-    if (date) filter.registrationDate = date;
+    
+    // Handle date filter - convert to proper date range if needed
+    if (date) {
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1);
+      filter.registrationDate = {
+        $gte: startDate,
+        $lt: endDate
+      };
+    }
+    
     if (status && status !== 'all') filter.status = status;
     const numericLimit = Math.max(1, parseInt(limit));
     const numericPage = Math.max(1, parseInt(page));
@@ -115,6 +126,8 @@ router.get('/', authenticateToken, async (req, res) => {
         .limit(numericLimit),
       Registrant.countDocuments(filter)
     ]);
+
+    console.log(`[GET /api/registrants] Found ${registrants.length} registrants (total: ${total}) with filter:`, filter);
 
     res.json({
       data: registrants,
