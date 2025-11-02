@@ -30,6 +30,7 @@ router.post('/register', async (req, res) => {
     
     // Check for existing registrant with same email
     const existingRegistrant = await Registrant.findOne({ personalEmail });
+    console.log(`[POST /api/registrants/register] Checking for existing registrant with email ${personalEmail}:`, existingRegistrant ? { exists: true, status: existingRegistrant.status, schoolID: existingRegistrant.schoolID } : { exists: false });
     
     if (existingRegistrant) {
       // If registrant exists and was rejected, allow re-registration by updating the existing record
