@@ -259,10 +259,42 @@ export default function Registration() {
 
     try {
       const res = await axios.post(`${API_BASE}/api/registrants/register`, form);
+      console.log('=== REGISTRATION SUCCESS ===', res.status, res.data);
+      
       if (res.status === 200 && res.data.isReRegistration) {
+        // Trigger event for admin page to refresh
+        const timestamp = Date.now().toString();
+        console.log('Setting localStorage with timestamp:', timestamp);
+        localStorage.setItem('newRegistrantCreated', timestamp);
+        
+        // Dispatch event multiple times to ensure it's caught
+        const event = new Event('registrantCreated', { bubbles: true, cancelable: true });
+        window.dispatchEvent(event);
+        console.log('Dispatched registrantCreated event');
+        
+        // Dispatch again after a small delay to ensure it's caught
+        setTimeout(() => {
+          window.dispatchEvent(new Event('registrantCreated', { bubbles: true, cancelable: true }));
+        }, 100);
+        
         setValidationModal({ isOpen: true, type: 'success', title: 'Re-registration Successful', message: res.data.message, onConfirm: handleReRegistrationSuccess, confirmText: 'Continue', showCancel: false });
         return;
       } else if (res.status === 201) {
+        // Trigger event for admin page to refresh
+        const timestamp = Date.now().toString();
+        console.log('Setting localStorage with timestamp:', timestamp);
+        localStorage.setItem('newRegistrantCreated', timestamp);
+        
+        // Dispatch event multiple times to ensure it's caught
+        const event = new Event('registrantCreated', { bubbles: true, cancelable: true });
+        window.dispatchEvent(event);
+        console.log('Dispatched registrantCreated event');
+        
+        // Dispatch again after a small delay to ensure it's caught
+        setTimeout(() => {
+          window.dispatchEvent(new Event('registrantCreated', { bubbles: true, cancelable: true }));
+        }, 100);
+        
         setSubmitted(true);
       }
     } catch (err) {

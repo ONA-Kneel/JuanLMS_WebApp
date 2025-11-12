@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 
 export default function Admin_AcademicSettings() {
@@ -272,6 +272,8 @@ export default function Admin_AcademicSettings() {
           setTimeout(() => fetchQuarters(year), 1000);
         } else if (activeQuarters.length === 1 && selectedYear && selectedYear.status === 'active') {
           // Auto-rollover: if the single active quarter ended today or earlier, move to the next chronological quarter
+          // BUT: Skip auto-rollover if the quarter was recently manually activated (within last 5 minutes)
+          // This allows users to reactivate ended quarters without immediate auto-deactivation
           try {
             const activeQuarter = activeQuarters[0];
             const today = new Date();
@@ -279,7 +281,12 @@ export default function Admin_AcademicSettings() {
             const activeEnd = new Date(activeQuarter.endDate);
             activeEnd.setHours(0, 0, 0, 0);
 
-            if (activeEnd <= today) {
+            // Check if quarter was manually activated (stored in localStorage)
+            // This allows users to reactivate ended quarters without auto-deactivation
+            const manuallyActivatedQuarters = JSON.parse(localStorage.getItem('manuallyActivatedQuarters') || '[]');
+            const isManuallyActivated = manuallyActivatedQuarters.includes(activeQuarter._id);
+
+            if (activeEnd <= today && !isManuallyActivated) {
               // Determine next quarter by chronological order within same school year (status not archived)
               const candidates = (data || [])
                 .filter(q => q._id !== activeQuarter._id && q.status !== 'archived')
@@ -308,6 +315,11 @@ export default function Admin_AcademicSettings() {
                   },
                   body: JSON.stringify({ status: 'inactive' })
                 });
+                
+                // Remove from manually activated list since it was auto-deactivated
+                const manuallyActivatedQuarters = JSON.parse(localStorage.getItem('manuallyActivatedQuarters') || '[]');
+                const updatedList = manuallyActivatedQuarters.filter(id => id !== activeQuarter._id);
+                localStorage.setItem('manuallyActivatedQuarters', JSON.stringify(updatedList));
 
                 // Activate next quarter (and ensure others are inactive per invariant)
                 // In case any other quarter is active due to race, deactivate all others first
@@ -855,17 +867,51 @@ export default function Admin_AcademicSettings() {
       return;
     }
 
-    // For quarter edits: allow editing while active but enforce validations
-    // Disallow editing dates in the past (only today onwards). If original start already passed, allow keeping same start but not moving earlier.
+    // Allow editing dates even if term has ended - allow extending dates
+    // Only prevent moving dates backwards from original dates
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const editStart = new Date(editTermFormData.startDate);
     const editEnd = new Date(editTermFormData.endDate);
     const originalStart = editingTerm ? new Date(editingTerm.startDate) : null;
-    const originalStartInPast = originalStart ? (new Date(originalStart.setHours(0,0,0,0)) < today) : false;
-    const startInvalid = originalStartInPast ? (editStart < new Date(new Date(editingTerm.startDate).setHours(0,0,0,0))) : (editStart < today);
-    if (startInvalid || editEnd < today) {
-      setEditTermError('Dates cannot be in the past. Choose today or a future date.');
+    const originalEnd = editingTerm ? new Date(editingTerm.endDate) : null;
+    
+    // Create copies to avoid mutating original dates
+    const originalStartDate = originalStart ? new Date(originalStart.getTime()) : null;
+    const originalEndDate = originalEnd ? new Date(originalEnd.getTime()) : null;
+    
+    if (originalStartDate) {
+      originalStartDate.setHours(0, 0, 0, 0);
+    }
+    if (originalEndDate) {
+      originalEndDate.setHours(0, 0, 0, 0);
+    }
+    editStart.setHours(0, 0, 0, 0);
+    editEnd.setHours(0, 0, 0, 0);
+    
+    // Allow extending dates if original end date has passed, but prevent moving dates backwards
+    // If original start date has passed, allow keeping or extending but not moving earlier
+    const originalStartInPast = originalStartDate ? (originalStartDate < today) : false;
+    const originalEndInPast = originalEndDate ? (originalEndDate < today) : false;
+    
+    // If original start has passed, only prevent moving it earlier than original
+    // If original start hasn't passed, prevent setting it before today
+    const startInvalid = originalStartInPast 
+      ? (editStart < originalStartDate)
+      : (editStart < today);
+    
+    // If original end has passed, allow extending but not moving earlier than original end
+    // If original end hasn't passed, allow extending to future but prevent moving before today
+    const endInvalid = originalEndInPast
+      ? (editEnd < originalEndDate)
+      : (editEnd < today);
+    
+    if (startInvalid || endInvalid) {
+      if (originalEndInPast) {
+        setEditTermError('Cannot move dates backwards. You can extend the end date but cannot set it earlier than the original end date.');
+      } else {
+        setEditTermError('Dates cannot be in the past. Choose today or a future date.');
+      }
       return;
     }
 
@@ -1272,6 +1318,20 @@ export default function Admin_AcademicSettings() {
         const updatedQuarter = await res.json();
         console.log('Quarter status updated successfully:', updatedQuarter);
         setQuarters(quarters.map(q => q._id === quarter._id ? updatedQuarter : q));
+        
+        // Track manually activated quarters in localStorage to prevent auto-rollover
+        const manuallyActivatedQuarters = JSON.parse(localStorage.getItem('manuallyActivatedQuarters') || '[]');
+        if (newStatus === 'active') {
+          // Add quarter ID to manually activated list
+          if (!manuallyActivatedQuarters.includes(quarter._id)) {
+            manuallyActivatedQuarters.push(quarter._id);
+            localStorage.setItem('manuallyActivatedQuarters', JSON.stringify(manuallyActivatedQuarters));
+          }
+        } else {
+          // Remove quarter ID from manually activated list when deactivated
+          const updatedList = manuallyActivatedQuarters.filter(id => id !== quarter._id);
+          localStorage.setItem('manuallyActivatedQuarters', JSON.stringify(updatedList));
+        }
         
         // Cascade status update to all related entities
         await cascadeQuarterStatusUpdate(quarter.quarterName, newStatus);
@@ -2051,10 +2111,16 @@ export default function Admin_AcademicSettings() {
                               <td className="p-3 border-b border-[#00418B]">{year.schoolYearStart}</td>
                               <td className="p-3 border-b border-[#00418B]">{year.schoolYearEnd}</td>
                               <td className="p-3 border-b border-[#00418B]">
-                                <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
-                                  ${year.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                                <button
+                                  onClick={() => handleToggleStatus(year)}
+                                  className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer
+                                    ${year.status === 'active' 
+                                      ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200' 
+                                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
+                                  title={year.status === 'active' ? 'Click to deactivate' : 'Click to activate'}
+                                >
                                   {year.status === 'active' ? 'Active' : 'Inactive'}
-                                </span>
+                                </button>
                               </td>
                               <td className="p-3 border-b border-[#00418B]">
                                 {(() => {
@@ -2074,25 +2140,6 @@ export default function Admin_AcademicSettings() {
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12Z" />
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
                                     </svg>
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleStatus(year)}
-                                    className={`p-2.5 rounded-md transition-colors shadow-sm ${
-                                      year.status === 'active' 
-                                        ? 'bg-red-200 hover:bg-red-300' 
-                                        : 'bg-green-200 hover:bg-green-300'
-                                    }`}
-                                    title={year.status === 'active' ? 'Deactivate school year' : 'Activate school year'}
-                                  >
-                                    {year.status === 'active' ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-700">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-green-700">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                      </svg>
-                                    )}
                                   </button>
                                   <button
                                     onClick={() => handleDelete(year)}
@@ -2247,40 +2294,20 @@ export default function Admin_AcademicSettings() {
                             </div>
                             <div className="flex items-center gap-2">
                               {selectedYear.status !== 'active' ? (
-                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+                                <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300 cursor-not-allowed">
                                   archived
                                 </span>
                               ) : (
-                                <>
-                                  {term.status === 'active' ? (
-                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
-                                    active
-                                  </span>
-                                ) : (
-                                  <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-                                    {term.status === 'archived' ? 'archived' : term.status}
-                                  </span>
-                                  )}
-                                  <button
-                                    onClick={() => handleToggleTermStatus(term)}
-                                    className={`p-2 rounded-md transition-colors shadow-sm ${
-                                      term.status === 'active' 
-                                        ? 'bg-red-200 hover:bg-red-300' 
-                                        : 'bg-green-200 hover:bg-green-300'
-                                    }`}
-                                    title={term.status === 'active' ? 'Deactivate term' : 'Activate term'}
-                                  >
-                                    {term.status === 'active' ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-red-700">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-green-700">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                      </svg>
-                                    )}
-                                  </button>
-                                </>
+                                <button
+                                  onClick={() => handleToggleTermStatus(term)}
+                                  className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer
+                                    ${term.status === 'active' 
+                                      ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200' 
+                                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
+                                  title={term.status === 'active' ? 'Click to deactivate' : 'Click to activate'}
+                                >
+                                  {term.status === 'active' ? 'active' : (term.status === 'archived' ? 'archived' : term.status)}
+                                </button>
                               )}
                               {/* Moved edit button next to date range for better accessibility */}
                             </div>
@@ -2320,14 +2347,20 @@ export default function Admin_AcademicSettings() {
                                     </td>
                                     <td className="p-3 border-b border-[#00418B]">
                                       {selectedYear.status !== 'active' ? (
-                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">archived</span>
+                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300 cursor-not-allowed">archived</span>
                                       ) : term.status !== 'active' ? (
-                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-300" title="Enable the term to toggle quarter status">{quarter.status}</span>
+                                        <span className="inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-300 cursor-not-allowed" title="Enable the term to toggle quarter status">{quarter.status}</span>
                                       ) : (
-                                        <span className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold
-                                          ${quarter.status === 'active' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-300'}`}>
+                                        <button
+                                          onClick={() => handleToggleQuarterStatus(quarter)}
+                                          className={`inline-block w-auto max-w-fit px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer
+                                            ${quarter.status === 'active' 
+                                              ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200' 
+                                              : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
+                                          title={quarter.status === 'active' ? 'Click to deactivate' : 'Click to activate'}
+                                        >
                                           {quarter.status === 'archived' ? 'inactive' : quarter.status}
-                                        </span>
+                                        </button>
                                       )}
                                     </td>
                                     <td className="p-3 border-b border-[#00418B]">
@@ -2341,27 +2374,6 @@ export default function Admin_AcademicSettings() {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 1 1 3.182 3.182L7.5 19.213l-4.182.455a.75.75 0 0 1-.826-.826l.455-4.182L16.862 3.487ZM19.5 6.75l-1.5-1.5" />
                                           </svg>
                                         </button>
-                                        {selectedYear.status === 'active' && term.status === 'active' && (
-                                          <button
-                                            onClick={() => handleToggleQuarterStatus(quarter)}
-                                            className={`p-2.5 rounded-md transition-colors shadow-sm ${
-                                              quarter.status === 'active' 
-                                                ? 'bg-red-200 hover:bg-red-300' 
-                                                : 'bg-green-200 hover:bg-green-300'
-                                            }`}
-                                            title={quarter.status === 'active' ? 'Deactivate quarter' : 'Activate quarter'}
-                                          >
-                                            {quarter.status === 'active' ? (
-                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-700">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                              </svg>
-                                            ) : (
-                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-green-700">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                              </svg>
-                                            )}
-                                          </button>
-                                        )}
                                         <button
                                           onClick={() => handleViewQuarter(quarter)}
                                           className="bg-blue-200 hover:bg-blue-300 p-2.5 rounded-md transition-colors shadow-sm"

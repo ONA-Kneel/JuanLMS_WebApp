@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import ExportModal from './ExportModal';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 function maskEmail(email) {
   if (!email || typeof email !== 'string') return '';
@@ -26,7 +26,7 @@ export default function Admin_Registrants() {
   const [registrants, setRegistrants] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [selectedDate, setSelectedDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // Default to 'all' to show all registrants
   const [studentAssignments, setStudentAssignments] = useState([]);
   const [students, setStudents] = useState([]);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -62,15 +62,16 @@ export default function Admin_Registrants() {
   
   // Client-side filtering for search
   const displayedRegistrants = registrants.filter(registrant => {
-    const matchesSchoolID = registrant.schoolID?.toLowerCase().includes(searchTerms.schoolID.toLowerCase());
-    const matchesFirstName = registrant.firstName?.toLowerCase().includes(searchTerms.firstName.toLowerCase());
-    const matchesMiddleName = registrant.middleName?.toLowerCase().includes(searchTerms.middleName.toLowerCase());
-    const matchesLastName = registrant.lastName?.toLowerCase().includes(searchTerms.lastName.toLowerCase());
-    const matchesPersonalEmail = registrant.personalEmail?.toLowerCase().includes(searchTerms.personalEmail.toLowerCase());
-    const matchesTrack = registrant.trackName?.toLowerCase().includes(searchTerms.track.toLowerCase());
-    const matchesStrand = registrant.strandName?.toLowerCase().includes(searchTerms.strand.toLowerCase());
-    const matchesSection = registrant.sectionName?.toLowerCase().includes(searchTerms.section.toLowerCase());
-    const matchesStatus = searchTerms.status === "all" || registrant.status === searchTerms.status;
+    // Only apply filters if search terms are not empty
+    const matchesSchoolID = !searchTerms.schoolID || registrant.schoolID?.toLowerCase().includes(searchTerms.schoolID.toLowerCase());
+    const matchesFirstName = !searchTerms.firstName || registrant.firstName?.toLowerCase().includes(searchTerms.firstName.toLowerCase());
+    const matchesMiddleName = !searchTerms.middleName || registrant.middleName?.toLowerCase().includes(searchTerms.middleName.toLowerCase());
+    const matchesLastName = !searchTerms.lastName || registrant.lastName?.toLowerCase().includes(searchTerms.lastName.toLowerCase());
+    const matchesPersonalEmail = !searchTerms.personalEmail || registrant.personalEmail?.toLowerCase().includes(searchTerms.personalEmail.toLowerCase());
+    const matchesTrack = !searchTerms.track || registrant.trackName?.toLowerCase().includes(searchTerms.track.toLowerCase());
+    const matchesStrand = !searchTerms.strand || registrant.strandName?.toLowerCase().includes(searchTerms.strand.toLowerCase());
+    const matchesSection = !searchTerms.section || registrant.sectionName?.toLowerCase().includes(searchTerms.section.toLowerCase());
+    const matchesStatus = searchTerms.status === "all" || !searchTerms.status || registrant.status === searchTerms.status;
     return matchesSchoolID && matchesFirstName && matchesMiddleName && matchesLastName && matchesPersonalEmail && matchesTrack && matchesStrand && matchesSection && matchesStatus;
   });
 
@@ -101,8 +102,11 @@ export default function Admin_Registrants() {
       if (selectedDate) params.date = selectedDate;
       if (statusFilter !== 'all') params.status = statusFilter;
       
+      console.log('Fetching registrants with params:', params);
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
+      console.log('Fetched registrants:', res.data?.data?.length || 0, 'registrants');
+      console.log('Registrants data:', res.data?.data);
       setRegistrants(res.data?.data || []);
       if (res.data?.pagination && !isCurrentlySearching) {
         setPagination(res.data.pagination);
@@ -149,7 +153,7 @@ export default function Admin_Registrants() {
       
       const [registrantsRes, yearRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/api/registrants`, { 
-          params: { page: pagination.page, limit: pagination.limit },
+          params: { page: 1, limit: pagination.limit, status: 'all' }, // Always fetch all on initial load
           headers: { Authorization: `Bearer ${token}` } 
         }),
         fetch(`${API_BASE}/api/schoolyears/active`, {
@@ -213,6 +217,196 @@ export default function Admin_Registrants() {
     fetchInitialData();
   }, []);
 
+  // Create a ref to store the refresh function so it can be called from anywhere
+  const refreshRegistrantsRef = useRef(null);
+  
+  // Listen for storage events to refresh when new registrants are created
+  useEffect(() => {
+    let lastCheckedTime = 0;
+    let isRefreshing = false;
+    
+    const performRefresh = async () => {
+      // Prevent multiple simultaneous refreshes
+      if (isRefreshing) {
+        console.log('Refresh already in progress, skipping...');
+        return;
+      }
+      
+      isRefreshing = true;
+      console.log('=== PERFORMING REFRESH FOR NEW REGISTRANT ===');
+      
+      try {
+        // Clear all filters first
+        setSearchTerms({
+          schoolID: "",
+          firstName: "",
+          middleName: "",
+          lastName: "",
+          personalEmail: "",
+          track: "",
+          strand: "",
+          section: "",
+          status: "all"
+        });
+        setSelectedDate('');
+        setStatusFilter('all');
+        setActiveTab('all');
+        setPagination({ page: 1, limit: 10, total: 0, totalPages: 1 });
+        
+        // Wait a tiny bit for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Force immediate refresh with fresh API call
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        console.log('Fetching registrants with fresh API call...');
+        const res = await axios.get(`${API_BASE}/api/registrants`, { 
+          params: { page: 1, limit: 10, status: 'all' },
+          headers: { Authorization: `Bearer ${token}` } 
+        });
+        
+        console.log('=== REFRESH RESULTS ===');
+        console.log('Fetched registrants:', res.data?.data?.length || 0, 'registrants');
+        console.log('First registrant ID:', res.data?.data?.[0]?._id);
+        console.log('First registrant name:', res.data?.data?.[0]?.firstName, res.data?.data?.[0]?.lastName);
+        console.log('All registrant IDs:', res.data?.data?.map(r => r._id));
+        console.log('All registrant statuses:', res.data?.data?.map(r => r.status));
+        
+        // Force update registrants state
+        const fetchedRegistrants = res.data?.data || [];
+        setRegistrants(fetchedRegistrants);
+        
+        // Force update pagination
+        if (res.data?.pagination) {
+          setPagination(res.data.pagination);
+        } else {
+          // If no pagination, create one
+          setPagination({
+            page: 1,
+            limit: 10,
+            total: fetchedRegistrants.length,
+            totalPages: Math.ceil(fetchedRegistrants.length / 10)
+          });
+        }
+        
+        // Update the ref for polling
+        if (fetchedRegistrants.length > 0) {
+          lastFirstRegistrantIdRef.current = fetchedRegistrants[0]._id;
+          console.log('Updated lastFirstRegistrantIdRef to:', lastFirstRegistrantIdRef.current);
+        }
+        
+        // Force a re-render by logging the state
+        console.log('State updated - registrants count:', fetchedRegistrants.length);
+      } catch (err) {
+        console.error('Refresh error:', err);
+        setError('Failed to refresh registrants');
+      } finally {
+        setLoading(false);
+        isRefreshing = false;
+        console.log('=== REFRESH COMPLETE ===');
+      }
+    };
+    
+    // Store the refresh function in ref so it can be called from polling
+    refreshRegistrantsRef.current = performRefresh;
+    
+    const handleStorageChange = (e) => {
+      if (e.key === 'newRegistrantCreated' || e.key === 'registrantUpdated') {
+        console.log('=== STORAGE EVENT DETECTED ===', e.key);
+        performRefresh();
+      }
+    };
+
+    // Listen for storage events (from other tabs/windows)
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events (from same window)
+    const handleCustomEvent = (e) => {
+      console.log('=== CUSTOM EVENT DETECTED ===', e.type);
+      performRefresh();
+    };
+    window.addEventListener('registrantCreated', handleCustomEvent);
+
+    // Also listen for localStorage changes in the same window
+    const handleLocalStorageChange = () => {
+      const lastCreated = localStorage.getItem('newRegistrantCreated');
+      if (lastCreated) {
+        const lastCreatedTime = parseInt(lastCreated);
+        const now = Date.now();
+        // Only refresh if the event happened in the last 15 seconds and we haven't checked this timestamp yet
+        if (now - lastCreatedTime < 15000 && lastCreatedTime > lastCheckedTime) {
+          console.log('=== LOCALSTORAGE CHANGE DETECTED ===', 'Time diff:', now - lastCreatedTime, 'ms');
+          lastCheckedTime = lastCreatedTime;
+          performRefresh();
+        }
+      }
+    };
+
+    // Check for new registrants every 500ms (very fast checking)
+    const checkInterval = setInterval(() => {
+      handleLocalStorageChange();
+    }, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('registrantCreated', handleCustomEvent);
+      clearInterval(checkInterval);
+      refreshRegistrantsRef.current = null;
+    };
+  }, []);
+
+  // Track the first registrant ID to detect new registrants
+  const lastFirstRegistrantIdRef = useRef(null);
+  
+  // Initialize with current first registrant
+  useEffect(() => {
+    if (registrants.length > 0 && !lastFirstRegistrantIdRef.current) {
+      lastFirstRegistrantIdRef.current = registrants[0]?._id;
+    }
+  }, [registrants]);
+
+  // Poll for new registrants every 2 seconds (very frequent for immediate updates)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only poll if not currently searching and on the first page with no filters
+      if (!isSearching && pagination.page === 1 && statusFilter === 'all' && !selectedDate) {
+        // Direct API call to ensure fresh data
+        const token = localStorage.getItem("token");
+        axios.get(`${API_BASE}/api/registrants`, { 
+          params: { page: 1, limit: 10, status: 'all' },
+          headers: { Authorization: `Bearer ${token}` } 
+        }).then(res => {
+          const newRegistrants = res.data?.data || [];
+          const firstRegistrantId = newRegistrants[0]?._id;
+          
+          // Always update if first registrant changed (new one appeared at top) or if list is empty
+          if (firstRegistrantId !== lastFirstRegistrantIdRef.current || registrants.length === 0) {
+            if (firstRegistrantId !== lastFirstRegistrantIdRef.current && lastFirstRegistrantIdRef.current !== null) {
+              console.log(`=== POLLING: NEW REGISTRANT DETECTED ===`);
+              console.log(`First ID changed: ${lastFirstRegistrantIdRef.current} -> ${firstRegistrantId}`);
+              console.log('New registrant:', newRegistrants[0]);
+              // Also trigger the refresh function to ensure everything is updated
+              if (refreshRegistrantsRef.current) {
+                refreshRegistrantsRef.current();
+              }
+            } else {
+              // Just update the list if it's different
+              lastFirstRegistrantIdRef.current = firstRegistrantId;
+              setRegistrants(newRegistrants);
+              if (res.data?.pagination) {
+                setPagination(res.data.pagination);
+              }
+            }
+          }
+        }).catch(err => {
+          console.error('Polling error:', err);
+        });
+      }
+    }, 2000); // Poll every 2 seconds for very fast updates
+
+    return () => clearInterval(interval);
+  }, [isSearching, pagination.page, statusFilter, selectedDate]);
+
   useEffect(() => {
     // Reset to first page when switching tabs to get correct pagination per status
     setPagination(prev => ({ ...prev, page: 1 }));
@@ -220,7 +414,7 @@ export default function Admin_Registrants() {
 
   useEffect(() => {
     fetchRegistrants();
-  }, [selectedDate, statusFilter, pagination.page, pagination.limit, searchTerms]);
+  }, [selectedDate, statusFilter, pagination.page, pagination.limit, searchTerms.schoolID, searchTerms.firstName, searchTerms.middleName, searchTerms.lastName, searchTerms.personalEmail, searchTerms.track, searchTerms.strand, searchTerms.section, searchTerms.status]);
 
   // Update statusFilter when activeTab changes
   useEffect(() => {
@@ -604,7 +798,45 @@ export default function Admin_Registrants() {
               </button>
               <button 
                 className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" 
-                onClick={fetchRegistrants}
+                onClick={async () => {
+                  console.log('Manual refresh button clicked');
+                  // Reset to first page and refresh
+                  setSearchTerms({
+                    schoolID: "",
+                    firstName: "",
+                    middleName: "",
+                    lastName: "",
+                    personalEmail: "",
+                    track: "",
+                    strand: "",
+                    section: "",
+                    status: "all"
+                  });
+                  setSelectedDate('');
+                  setStatusFilter('all');
+                  setActiveTab('all');
+                  setPagination({ page: 1, limit: 10, total: 0, totalPages: 1 });
+                  
+                  // Force immediate refresh with fresh params
+                  try {
+                    setLoading(true);
+                    const token = localStorage.getItem("token");
+                    const res = await axios.get(`${API_BASE}/api/registrants`, { 
+                      params: { page: 1, limit: 10, status: 'all' },
+                      headers: { Authorization: `Bearer ${token}` } 
+                    });
+                    console.log('Manual refresh - Fetched registrants:', res.data?.data?.length || 0);
+                    setRegistrants(res.data?.data || []);
+                    if (res.data?.pagination) {
+                      setPagination(res.data.pagination);
+                    }
+                  } catch (err) {
+                    console.error('Manual refresh error:', err);
+                    setError('Failed to refresh registrants');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
               >
                 Refresh
               </button>

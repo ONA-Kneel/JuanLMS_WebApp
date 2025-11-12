@@ -37,6 +37,70 @@ termSchema.pre('save', function(next) {
   next();
 });
 
+// Pre-save hook to cascade inactive status to related entities
+termSchema.pre('save', async function(next) {
+  // Only cascade if status is being changed to 'inactive' and it wasn't inactive before
+  if (this.isModified('status') && this.status === 'inactive') {
+    try {
+      // Import models here to avoid circular dependencies
+      const Track = mongoose.model('Track');
+      const Strand = mongoose.model('Strand');
+      const Section = mongoose.model('Section');
+      const Subject = mongoose.model('Subject');
+      const StudentAssignment = mongoose.model('StudentAssignment');
+      const FacultyAssignment = mongoose.model('FacultyAssignment');
+      const Quarter = mongoose.model('Quarter');
+      
+      console.log(`[Term Model] Cascading inactive status for term: ${this.termName} (${this.schoolYear})`);
+      
+      // Cascade to all related entities (only non-archived ones)
+      await Promise.all([
+        // Set quarters to inactive
+        Quarter.updateMany(
+          { schoolYear: this.schoolYear, termName: this.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        
+        // Set student assignments to inactive
+        StudentAssignment.updateMany(
+          { termId: this._id, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        
+        // Set faculty assignments to inactive
+        FacultyAssignment.updateMany(
+          { termId: this._id, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        
+        // Set structural entities to inactive
+        Track.updateMany(
+          { schoolYear: this.schoolYear, termName: this.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: this.schoolYear, termName: this.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Section.updateMany(
+          { schoolYear: this.schoolYear, termName: this.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: this.schoolYear, termName: this.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        )
+      ]);
+      
+      console.log(`[Term Model] Successfully cascaded inactive status for term: ${this.termName}`);
+    } catch (error) {
+      console.error('[Term Model] Error cascading inactive status:', error);
+      // Don't block the save, but log the error
+    }
+  }
+  next();
+});
+
 // Pre-remove middleware for cascading deletes
 termSchema.pre('remove', async function(next) {
   try {

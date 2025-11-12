@@ -255,6 +255,47 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     if (req.body.status === 'active') {
       const { activeQuarterName } = req.body;
       // Set other terms in the same school year to INACTIVE (not archived)
+      // First, get the terms that will be deactivated so we can cascade
+      const termsToDeactivate = await Term.find(
+        { _id: { $ne: term._id }, schoolYear: term.schoolYear, status: { $ne: 'inactive' } }
+      );
+      
+      // Cascade inactive status to related entities for each term being deactivated
+      for (const termToDeactivate of termsToDeactivate) {
+        console.log(`Cascading inactive status for term: ${termToDeactivate.termName} (${termToDeactivate.schoolYear})`);
+        await Promise.all([
+          Quarter.updateMany(
+            { schoolYear: termToDeactivate.schoolYear, termName: termToDeactivate.termName, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          StudentAssignment.updateMany(
+            { termId: termToDeactivate._id, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          FacultyAssignment.updateMany(
+            { termId: termToDeactivate._id, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          Track.updateMany(
+            { schoolYear: termToDeactivate.schoolYear, termName: termToDeactivate.termName, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          Strand.updateMany(
+            { schoolYear: termToDeactivate.schoolYear, termName: termToDeactivate.termName, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          Section.updateMany(
+            { schoolYear: termToDeactivate.schoolYear, termName: termToDeactivate.termName, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          ),
+          Subject.updateMany(
+            { schoolYear: termToDeactivate.schoolYear, termName: termToDeactivate.termName, status: { $ne: 'archived' } },
+            { $set: { status: 'inactive' } }
+          )
+        ]);
+      }
+      
+      // Now update the terms to inactive
       await Term.updateMany(
         { _id: { $ne: term._id }, schoolYear: term.schoolYear },
         { status: 'inactive' }
@@ -262,41 +303,41 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       
       term.status = 'active';
       
-      // Reactivate all related entities for this term
+      // Reactivate all related entities for this term (all non-archived entities become active)
       console.log(`Reactivating all entities for term: ${term.termName} (${term.schoolYear})`);
       
       await Promise.all([
-        // Reactivate assignments
+        // Reactivate assignments (all non-archived become active)
         StudentAssignment.updateMany(
-          { termId: term._id }, 
+          { termId: term._id, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         FacultyAssignment.updateMany(
-          { termId: term._id }, 
+          { termId: term._id, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         
-        // Reactivate quarters for this term
+        // Reactivate quarters for this term (all non-archived become active)
         Quarter.updateMany(
-          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         
-        // Reactivate structural entities by schoolYear and termName
+        // Reactivate structural entities by schoolYear and termName (all non-archived become active)
         Track.updateMany(
-          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         Strand.updateMany(
-          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         Section.updateMany(
-          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         ),
         Subject.updateMany(
-          { schoolYear: term.schoolYear, termName: term.termName }, 
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } }, 
           { $set: { status: 'active' } }
         )
       ]);
@@ -408,14 +449,70 @@ router.patch('/:id', authenticateToken, async (req, res) => {
       
     } else if (req.body.status === 'inactive') {
       // Allow turning an active term into inactive (on/off behavior)
-      // Set all of its non-archived quarters to inactive to maintain invariants
-      if (term.status === 'active') {
-        await Quarter.updateMany(
+      // Cascade: Set all related entities to inactive when term ends
+      console.log(`Setting all entities to inactive for term: ${term.termName} (${term.schoolYear})`);
+      
+      await Promise.all([
+        // Set quarters to inactive (all non-archived become inactive for consistency)
+        Quarter.updateMany(
           { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
           { $set: { status: 'inactive' } }
-        );
-      }
+        ),
+        
+        // Set student assignments to inactive (all non-archived become inactive)
+        StudentAssignment.updateMany(
+          { termId: term._id, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        
+        // Set faculty assignments to inactive (all non-archived become inactive)
+        FacultyAssignment.updateMany(
+          { termId: term._id, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        
+        // Set structural entities to inactive (all non-archived become inactive)
+        Track.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Strand.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Section.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        ),
+        Subject.updateMany(
+          { schoolYear: term.schoolYear, termName: term.termName, status: { $ne: 'archived' } },
+          { $set: { status: 'inactive' } }
+        )
+      ]);
+      
       term.status = 'inactive';
+      
+      console.log(`Successfully set all entities to inactive for term: ${term.termName}`);
+      
+      // Audit: Term deactivated
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        const url = `${req.protocol}://${req.get('host')}/audit-log`;
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'Term Deactivated',
+            details: `Term ${term.termName} for School Year ${term.schoolYear} deactivated. All related entities (quarters, assignments, tracks, strands, sections, subjects) set to inactive.`,
+            userRole: req.user?.role || 'system'
+          })
+        });
+      } catch (auditErr) {
+        console.warn('[Audit] Failed to log term deactivation:', auditErr);
+      }
     } else if (req.body.status) {
       term.status = req.body.status;
     }
