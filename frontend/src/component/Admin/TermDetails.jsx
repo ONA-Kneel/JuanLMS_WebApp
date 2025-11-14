@@ -449,9 +449,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const data = await res.json();
         console.log('Tracks loaded:', data);
         // Deduplicate tracks by _id to prevent React key collisions
-        const uniqueTracks = data.filter((track, index, arr) => 
-          arr.findIndex(t => t._id === track._id) === index
-        );
+        // Filter by status='active' and quarter (if quarterData exists)
+        const uniqueTracks = data.filter((track, index, arr) => {
+          const isUnique = arr.findIndex(t => t._id === track._id) === index;
+          const isActive = track.status === 'active';
+          const matchesQuarter = !quarterData || !track.quarterName || track.quarterName === quarterData.quarterName;
+          return isUnique && isActive && matchesQuarter;
+        });
         setTracks(uniqueTracks);
       } else {
         const data = await res.json();
@@ -580,7 +584,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const res = await fetch(`${API_BASE}/api/strands/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
-        setStrands(data);
+        // Filter by status='active' and quarter (if quarterData exists)
+        const filteredData = data.filter(strand => {
+          const isActive = strand.status === 'active';
+          const matchesQuarter = !quarterData || !strand.quarterName || strand.quarterName === quarterData.quarterName;
+          return isActive && matchesQuarter;
+        });
+        setStrands(filteredData);
       } else {
         const data = await res.json();
         setStrandError(data.message || 'Failed to fetch strands');
@@ -608,7 +618,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const res = await fetch(`${API_BASE}/api/sections/track/${track.trackName}/strand/${strand.strandName}?schoolYear=${termDetails.schoolYear}&termName=${termDetails.termName}${quarterParam}`);
           if (res.ok) {
             const data = await res.json();
-            allSections.push(...data);
+            // Filter by status='active' and quarter (if quarterData exists)
+            const filteredData = data.filter(section => {
+              const isActive = section.status === 'active';
+              const matchesQuarter = !quarterData || !section.quarterName || section.quarterName === quarterData.quarterName;
+              return isActive && matchesQuarter;
+            });
+            allSections.push(...filteredData);
           } else {
             const data = await res.json();
             setSectionError(data.message || `Failed to fetch sections for track ${track.trackName}, strand ${strand.strandName}`);
@@ -2332,7 +2348,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     }
   };
 
-  const handleEditStudentAssignment = (assignment) => {
+  const handleEditStudentAssignment = async (assignment) => {
     setIsStudentEditMode(true);
     setEditingStudentAssignment(assignment);
     setIsStudentModalOpen(true); // This was missing!
@@ -2354,20 +2370,77 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       setStudentSearchTerm('');
     }
 
+    // Determine if irregular student
+    const isIrregular = assignment.enrollmentType === 'Irregular' || assignment.EnrollmentType === 'Irregular';
+    setIsIrregularStudent(isIrregular);
+
+    // Set student manual ID (school ID)
+    const schoolId = assignment.studentSchoolID || assignment.schoolID || student?.schoolID || '';
+    setStudentManualId(schoolId);
+
+    // Populate all form fields
     setStudentFormData({
-      studentId: assignment.studentId,
+      studentId: assignment.studentId || '',
       trackId: trackId,
       strandId: strandId,
       sectionIds: sectionId ? [sectionId] : [],
-      gradeLevel: assignment.gradeLevel || '', // Populate gradeLevel
+      gradeLevel: assignment.gradeLevel || '',
+      enrollmentNo: assignment.enrollmentNo || '',
+      enrollmentDate: assignment.enrollmentDate ? new Date(assignment.enrollmentDate).toISOString().split('T')[0] : '',
+      lastName: assignment.lastName || assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || '',
+      firstName: assignment.firstName || assignment.firstname || assignment.studentName?.split(' ')[0] || '',
     });
+
+    // Fetch subjects if irregular student
+    if (isIrregular && assignment._id) {
+      try {
+        const token = localStorage.getItem('token');
+        // Fetch the full assignment to get subjects
+        const res = await fetch(`${API_BASE}/api/student-assignments/${assignment._id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const fullAssignment = await res.json();
+          if (fullAssignment.subjects && Array.isArray(fullAssignment.subjects)) {
+            setSelectedSubjects(fullAssignment.subjects.map(subj => ({
+              subjectId: subj.subjectId || subj._id,
+              subjectName: subj.subjectName || subj.name
+            })));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching assignment subjects:', error);
+        setSelectedSubjects([]);
+      }
+    } else {
+      setSelectedSubjects([]);
+    }
+
+    // Fetch available subjects for the selected track/strand/grade if irregular
+    if (isIrregular && trackId && strandId && assignment.gradeLevel) {
+      const selectedTrack = tracks.find(t => t._id === trackId);
+      const selectedStrand = strands.find(s => s._id === strandId);
+      if (selectedTrack && selectedStrand) {
+        fetchAvailableSubjects(selectedTrack.trackName, selectedStrand.strandName, assignment.gradeLevel);
+      }
+    } else {
+      setAvailableSubjects([]);
+    }
   };
   const handleUpdateStudentAssignment = async (e) => {
     e.preventDefault();
     setStudentError('');
 
-    if (!studentFormData.studentId || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment.');
+    // Check if we have either studentId or manual entry (firstName/lastName)
+    const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
+    if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
+      setStudentError('All fields are required for student assignment. Provide student information.');
+      return;
+    }
+
+    // Validate irregular student requirements
+    if (isIrregularStudent && selectedSubjects.length === 0) {
+      setStudentError('Please select at least one subject for irregular student.');
       return;
     }
 
@@ -2383,6 +2456,47 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     if (window.confirm("Save changes to this student assignment?")) {
       try {
         const token = localStorage.getItem('token');
+        const studentToAssign = students.find(s => s._id === studentFormData.studentId);
+
+        // Build update payload with all fields
+        const updatePayload = {
+          trackName: selectedTrack.trackName,
+          strandName: selectedStrand.strandName,
+          sectionName: selectedSection.sectionName,
+          gradeLevel: studentFormData.gradeLevel,
+          termId: termDetails._id,
+          enrollmentType: isIrregularStudent ? 'Irregular' : 'Regular',
+          enrollmentNo: studentFormData.enrollmentNo || undefined,
+          enrollmentDate: studentFormData.enrollmentDate || undefined,
+        };
+
+        // Add studentId only if it exists
+        if (studentFormData.studentId) {
+          updatePayload.studentId = studentFormData.studentId;
+        }
+
+        // Add subjects if irregular student
+        if (isIrregularStudent && selectedSubjects.length > 0) {
+          updatePayload.subjects = selectedSubjects;
+        }
+
+        // Add student info based on whether it's an existing student or manual entry
+        if (studentToAssign) {
+          // Update student name and school ID if student exists
+          updatePayload.studentName = `${studentToAssign.firstname || studentToAssign.firstName} ${studentToAssign.lastname || studentToAssign.lastName}`;
+          if (studentToAssign.schoolID) {
+            updatePayload.studentSchoolID = studentToAssign.schoolID;
+          } else if (studentManualId) {
+            updatePayload.studentSchoolID = studentManualId;
+          }
+        } else if (studentFormData.firstName || studentFormData.lastName) {
+          // Manual entry - send firstName/lastName instead of studentId
+          updatePayload.firstName = studentFormData.firstName;
+          updatePayload.lastName = studentFormData.lastName;
+          if (studentManualId) {
+            updatePayload.studentSchoolID = studentManualId;
+          }
+        }
 
         const res = await fetch(`${API_BASE}/api/student-assignments/${editingStudentAssignment._id}`, {
           method: 'PATCH',
@@ -2390,14 +2504,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({
-            studentId: studentFormData.studentId,
-            trackName: selectedTrack.trackName,
-            strandName: selectedStrand.strandName,
-            sectionName: selectedSection.sectionName,
-            gradeLevel: studentFormData.gradeLevel, // Update gradeLevel
-            termId: termDetails._id,
-          })
+          body: JSON.stringify(updatePayload)
         });
 
         if (res.ok) {
@@ -2429,10 +2536,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           fetchStudentAssignments();
           setIsStudentEditMode(false);
           setEditingStudentAssignment(null);
-          setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
+          setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', enrollmentNo: '', enrollmentDate: '', lastName: '', firstName: '' });
           setIsIrregularStudent(false);
           setSelectedSubjects([]);
           setAvailableSubjects([]);
+          setStudentManualId('');
+          setStudentSearchTerm('');
+          setIsStudentModalOpen(false);
         } else {
           const data = await res.json();
           const errorMessage = data.message || 'Failed to update student assignment';
@@ -5381,7 +5491,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const res = await fetch(`${API_BASE}/api/subjects/schoolyear/${termDetails.schoolYear}/term/${termDetails.termName}${quarterParam}`);
       if (res.ok) {
         const data = await res.json();
-        setSubjects(data);
+        // Filter by status='active' and quarter (if quarterData exists)
+        const filteredData = data.filter(subject => {
+          const isActive = (subject.status || 'active') === 'active';
+          const matchesQuarter = !quarterData || !subject.quarterName || subject.quarterName === quarterData.quarterName;
+          return isActive && matchesQuarter;
+        });
+        setSubjects(filteredData);
       } else {
         const data = await res.json();
         console.error('Failed to fetch subjects:', data);
@@ -7009,21 +7125,27 @@ Validation issues (${skippedCount} items):
   // Place after all useState/useEffect, before return
   const filteredTracks = tracks.filter(t => {
     const matchesTerm = t.schoolYear === termDetails?.schoolYear && t.termName === termDetails?.termName;
-    // Entities should be visible across all quarters within the same term
-    return matchesTerm;
+    const isActive = t.status === 'active';
+    const matchesQuarter = !quarterData || !t.quarterName || t.quarterName === quarterData.quarterName;
+    // Only show active tracks from current quarter (or without quarter if no quarter selected)
+    return matchesTerm && isActive && matchesQuarter;
   });
   
   const filteredSubjects = subjects.filter(s => {
     const matchesTerm = s.schoolYear === termDetails?.schoolYear && s.termName === termDetails?.termName;
-    // Entities should be visible across all quarters within the same term
-    return matchesTerm;
+    const isActive = (s.status || 'active') === 'active';
+    const matchesQuarter = !quarterData || !s.quarterName || s.quarterName === quarterData.quarterName;
+    // Only show active subjects from current quarter (or without quarter if no quarter selected)
+    return matchesTerm && isActive && matchesQuarter;
   });
 
   // Before rendering the strands table, filter out duplicate strands by _id
   const filteredStrands = strands.filter(strand => {
     const matchesTerm = strand.schoolYear === termDetails.schoolYear && strand.termName === termDetails.termName;
-    // Entities should be visible across all quarters within the same term
-    return matchesTerm;
+    const isActive = strand.status === 'active';
+    const matchesQuarter = !quarterData || !strand.quarterName || strand.quarterName === quarterData.quarterName;
+    // Only show active strands from current quarter (or without quarter if no quarter selected)
+    return matchesTerm && isActive && matchesQuarter;
   });
 
   const uniqueStrands = filteredStrands.filter(
@@ -7031,11 +7153,13 @@ Validation issues (${skippedCount} items):
       index === self.findIndex((s) => s._id === strand._id)
   );
 
-  // Filter sections by term only - entities should be visible across all quarters within the same term
+  // Filter sections by term, status, and quarter
   const filteredSections = sections.filter(section => {
     const matchesTerm = section.schoolYear === termDetails?.schoolYear && section.termName === termDetails?.termName;
-    // Entities should be visible across all quarters within the same term
-    return matchesTerm;
+    const isActive = section.status === 'active';
+    const matchesQuarter = !quarterData || !section.quarterName || section.quarterName === quarterData.quarterName;
+    // Only show active sections from current quarter (or without quarter if no quarter selected)
+    return matchesTerm && isActive && matchesQuarter;
   });
 
   // Update: Enforce absolute uniqueness for strand names

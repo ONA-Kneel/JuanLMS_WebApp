@@ -90,6 +90,7 @@ export default function Admin_AcademicSettings() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showInactiveSchoolYears, setShowInactiveSchoolYears] = useState(false);
   
   // State for validation results modal (commented out for now)
   // const [validationModalOpen, setValidationModalOpen] = useState(false);
@@ -2050,7 +2051,27 @@ export default function Admin_AcademicSettings() {
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow mb-4 border-2 border-[#00418B]">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 gap-2">
-                    <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
+                    <div className="flex items-center gap-4">
+                      <h4 className="text-xl md:text-2xl font-semibold">School Years</h4>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <span className="text-sm text-gray-700">Show inactive school years</span>
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={showInactiveSchoolYears}
+                            onChange={(e) => setShowInactiveSchoolYears(e.target.checked)}
+                            className="sr-only"
+                          />
+                          <div className={`w-14 h-7 rounded-full transition-colors duration-200 ${
+                            showInactiveSchoolYears ? 'bg-[#00418B]' : 'bg-gray-300'
+                          }`}>
+                            <div className={`w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                              showInactiveSchoolYears ? 'translate-x-7' : 'translate-x-1'
+                            } mt-0.5`}></div>
+                          </div>
+                        </div>
+                      </label>
+                    </div>
                                          <div className="flex gap-2">
                        {/* <button
                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
@@ -2079,6 +2100,11 @@ export default function Admin_AcademicSettings() {
                     <tbody>
                       {schoolYears
                         .filter(year => {
+                          // Filter by inactive status if toggle is off
+                          if (!showInactiveSchoolYears && year.status === 'inactive') {
+                            return false;
+                          }
+                          // Filter by search term
                           if (searchTerm === '') return true;
                           const searchLower = searchTerm.toLowerCase();
                           const startYear = year.schoolYearStart.toString();
@@ -2097,6 +2123,11 @@ export default function Admin_AcademicSettings() {
                       ) : (
                         schoolYears
                           .filter(year => {
+                            // Filter by inactive status if toggle is off
+                            if (!showInactiveSchoolYears && year.status === 'inactive') {
+                              return false;
+                            }
+                            // Filter by search term
                             if (searchTerm === '') return true;
                             const searchLower = searchTerm.toLowerCase();
                             const startYear = year.schoolYearStart.toString();
