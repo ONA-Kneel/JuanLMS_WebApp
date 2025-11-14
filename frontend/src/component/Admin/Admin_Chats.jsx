@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl } from "../../utils/imageUtils";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://juanlms-webapp-server.onrender.com";
 
 export default function Admin_Chats() {
   const [selectedChat, setSelectedChat] = useState(null);
