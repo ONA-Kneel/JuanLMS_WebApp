@@ -215,6 +215,7 @@ export default function Student_Chats() {
         receiverId: currentUserId,
         message: data.text || data.message,
         fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
         createdAt: new Date().toISOString(),
       };
 
@@ -318,6 +319,7 @@ export default function Student_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
         senderName: data.senderName || "Unknown",
         senderFirstname: data.senderFirstname || "Unknown",
         senderLastname: data.senderLastname || "User",
@@ -747,6 +749,7 @@ export default function Student_Chats() {
           groupId: selectedChat._id,
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
+          fileName: sentMessage.fileName || null,
           senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
           senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
           senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
@@ -805,6 +808,7 @@ export default function Student_Chats() {
           receiverId: selectedChat._id,
           text: sentMessage.message,
           fileUrl: sentMessage.fileUrl || null,
+          fileName: sentMessage.fileName || null,
         });
 
         setMessages((prev) => ({
@@ -1513,14 +1517,145 @@ export default function Student_Chats() {
                               <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-blue-900 text-white mt-0.5">
                                 {msg.message && <p>{msg.message}</p>}
                                 {msg.fileUrl && (
-                                  <a
-                                    href={`${API_BASE}/${msg.fileUrl}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="underline text-xs block mt-1 flex items-center gap-1"
-                                  >
-                                    🔗 File Attachment
-                                  </a>
+                                  <div className="mt-2">
+                                    {(() => {
+                                      // Check if fileUrl is already a full URL (Cloudinary) or relative path
+                                      const isFullUrl = msg.fileUrl.startsWith('http://') || msg.fileUrl.startsWith('https://');
+                                      const fileUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
+                                      
+                                      // Use stored fileName if available, otherwise try to extract from URL
+                                      let fileName = msg.fileName;
+                                      if (!fileName) {
+                                        // Try to extract filename from URL
+                                        const urlParts = msg.fileUrl.split('/');
+                                        const lastPart = urlParts[urlParts.length - 1].split('?')[0];
+                                        
+                                        // For Cloudinary raw files, we might need to guess the extension
+                                        // Check if it's a raw file (no extension in URL)
+                                        if (msg.fileUrl.includes('/raw/upload/')) {
+                                          // For raw files without extension, use a generic name
+                                          fileName = `attachment_${lastPart}`;
+                                        } else {
+                                          // Try to get extension from URL or use last part
+                                          fileName = lastPart;
+                                        }
+                                      }
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                      const isExcel = /\.(xlsx|xls)$/i.test(fileName);
+                                      const isPDF = /\.(pdf)$/i.test(fileName);
+                                      const isWord = /\.(doc|docx)$/i.test(fileName);
+                                      const isPowerPoint = /\.(ppt|pptx)$/i.test(fileName);
+                                      
+                                      // Handle file download with proper filename
+                                      const handleFileDownload = async (e) => {
+                                        e.preventDefault();
+                                        try {
+                                          // For Cloudinary raw files, we need to fetch as arrayBuffer to preserve binary data
+                                          const isCloudinaryRaw = fileUrl.includes('res.cloudinary.com') && fileUrl.includes('/raw/upload/');
+                                          
+                                          let downloadUrl = fileUrl;
+                                          if (fileUrl.includes('res.cloudinary.com')) {
+                                            // Check if URL already has query parameters
+                                            const separator = fileUrl.includes('?') ? '&' : '?';
+                                            // Add fl_attachment with filename to force proper download
+                                            downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                          }
+                                          
+                                          // Fetch the file
+                                          const response = await fetch(downloadUrl, {
+                                            method: 'GET',
+                                            mode: 'cors',
+                                          });
+                                          
+                                          if (!response.ok) {
+                                            throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+                                          }
+                                          
+                                          let blob;
+                                          if (isCloudinaryRaw) {
+                                            // For raw files, fetch as arrayBuffer to preserve binary integrity
+                                            const arrayBuffer = await response.arrayBuffer();
+                                            // Determine MIME type from file extension or response header
+                                            let mimeType = response.headers.get('content-type') || 'application/octet-stream';
+                                            
+                                            // Override with more specific MIME type if we have file extension
+                                            if (fileName.endsWith('.xlsx')) {
+                                              mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                                            } else if (fileName.endsWith('.xls')) {
+                                              mimeType = 'application/vnd.ms-excel';
+                                            } else if (fileName.endsWith('.pdf')) {
+                                              mimeType = 'application/pdf';
+                                            } else if (fileName.endsWith('.docx')) {
+                                              mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                            } else if (fileName.endsWith('.doc')) {
+                                              mimeType = 'application/msword';
+                                            }
+                                            
+                                            blob = new Blob([arrayBuffer], { type: mimeType });
+                                          } else {
+                                            blob = await response.blob();
+                                          }
+                                          
+                                          // Create download link with proper filename
+                                          const blobUrl = window.URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = blobUrl;
+                                          link.download = fileName;
+                                          link.style.display = 'none';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          setTimeout(() => {
+                                            document.body.removeChild(link);
+                                            window.URL.revokeObjectURL(blobUrl);
+                                          }, 100);
+                                        } catch (error) {
+                                          console.error('Error downloading file:', error);
+                                          // Fallback: try direct download with Cloudinary attachment parameter
+                                          if (fileUrl.includes('res.cloudinary.com')) {
+                                            const separator = fileUrl.includes('?') ? '&' : '?';
+                                            const downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                            window.open(downloadUrl, '_blank');
+                                          } else {
+                                            window.open(fileUrl, '_blank');
+                                          }
+                                        }
+                                      };
+                                      
+                                      return isImage ? (
+                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleFileDownload}>
+                                          <img
+                                            src={fileUrl}
+                                            alt="Attachment preview"
+                                            className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                            loading="lazy"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={fileUrl}
+                                          onClick={handleFileDownload}
+                                          className="text-blue-200 hover:text-blue-100 underline items-center gap-2 cursor-pointer"
+                                        >
+                                          {isExcel && "📊"}
+                                          {isPDF && "📄"}
+                                          {isWord && "📝"}
+                                          {isPowerPoint && "📊"}
+                                          {!isExcel && !isPDF && !isWord && !isPowerPoint && "📎"}
+                                          <span>
+                                            {isExcel ? "Excel File" : 
+                                             isPDF ? "PDF Document" :
+                                             isWord ? "Word Document" :
+                                             isPowerPoint ? "PowerPoint" :
+                                             "Attachment"}
+                                          </span>
+                                          <span className="text-xs opacity-75">
+                                            ({msg.fileName ? fileName : (fileName.startsWith('attachment_') ? 'File' : fileName)})
+                                          </span>
+                                        </a>
+                                      );
+                                    })()
+                                    }
+                                  </div>
                                 )}
                               </div>
                             </div>

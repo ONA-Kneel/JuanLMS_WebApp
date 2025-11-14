@@ -195,6 +195,7 @@ export default function Principal_Chats() {
         receiverId: currentUserId,
         message: data.text || data.message,
         fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
         createdAt: new Date().toISOString(),
       };
 
@@ -268,6 +269,7 @@ export default function Principal_Chats() {
         groupId: data.groupId,
         message: data.text,
         fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
         senderName: data.senderName || "Unknown",
         senderFirstname: data.senderFirstname || "Unknown",
         senderLastname: data.senderLastname || "User",
@@ -681,81 +683,98 @@ export default function Principal_Chats() {
   // ================= HANDLERS =================
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !selectedFile) return;
+    if (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0)) return;
     if (!selectedChat) return;
     if (isSending) return;
 
     setIsSending(true);
     if (isGroupChat) {
-      // Send group message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("groupId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/group-messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
+        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("groupId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        socket.current.emit("sendGroupMessage", {
-          senderId: currentUserId,
-          groupId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-          senderName: storedUser ? JSON.parse(storedUser).firstname + " " + JSON.parse(storedUser).lastname : "Unknown",
-          senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
-          senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
-          senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
-        });
+          const textRes = await axios.post(`${API_BASE}/group-messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          socket.current.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+            fileName: textMessage.fileName || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
 
-        // Update last message for this group chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
-        // Add to recent chats if not already there, or move to top if exists
-        setRecentChats((prev) => {
-          const exists = prev.some((c) => c._id === selectedChat._id);
-          if (!exists) {
-            // Add new chat to recent chats
-            const updated = [selectedChat, ...prev];
-            localStorage.setItem("recentChats_principal", JSON.stringify(updated));
-            return updated;
-          } else {
-            // Move existing chat to top
-            const filtered = prev.filter((c) => c._id !== selectedChat._id);
-            const updated = [selectedChat, ...filtered];
-            localStorage.setItem("recentChats_principal", JSON.stringify(updated));
-            return updated;
-          }
-        });
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
-        // Refresh recent conversations to ensure all users with message history are loaded
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("groupId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
+
+          const fileRes = await axios.post(`${API_BASE}/group-messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          socket.current.emit("sendGroupMessage", {
+            senderId: currentUserId,
+            groupId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+            fileName: fileMessage.fileName || null,
+            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
+            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
+            senderLastname: parsedUser ? parsedUser.lastname : "User",
+            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          });
+
+          setGroupMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+          bumpChatToTop(selectedChat);
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending group message:", err);
       } finally {
@@ -763,70 +782,95 @@ export default function Principal_Chats() {
       }
     } else {
       // Send individual message
-      const formData = new FormData();
-      formData.append("senderId", currentUserId);
-      formData.append("receiverId", selectedChat._id);
-      formData.append("message", newMessage);
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.post(`${API_BASE}/messages`, formData, {
-          headers: { 
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-          },
-        });
 
-        const sentMessage = res.data;
+        // 1) Send text message first if present
+        if (newMessage.trim()) {
+          const textForm = new FormData();
+          textForm.append("senderId", currentUserId);
+          textForm.append("receiverId", selectedChat._id);
+          textForm.append("message", newMessage.trim());
 
-        socket.current.emit("sendMessage", {
-          senderId: currentUserId,
-          receiverId: selectedChat._id,
-          text: sentMessage.message,
-          fileUrl: sentMessage.fileUrl || null,
-        });
+          const textRes = await axios.post(`${API_BASE}/messages`, textForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
 
-        setMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), sentMessage],
-        }));
+          const textMessage = textRes.data;
+          socket.current.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: textMessage.message,
+            fileUrl: textMessage.fileUrl || null,
+            fileName: textMessage.fileName || null,
+          });
 
-        // Add to recent chats if not already there, or move to top if exists
-        setRecentChats((prev) => {
-          const exists = prev.some((c) => c._id === selectedChat._id);
-          if (!exists) {
-            // Add new chat to recent chats
-            const updated = [selectedChat, ...prev];
-            localStorage.setItem("recentChats_principal", JSON.stringify(updated));
-            return updated;
-          } else {
-            // Move existing chat to top
-            const filtered = prev.filter((c) => c._id !== selectedChat._id);
-            const updated = [selectedChat, ...filtered];
-            localStorage.setItem("recentChats_principal", JSON.stringify(updated));
-            return updated;
-          }
-        });
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
+          }));
 
-        // Refresh recent conversations to ensure all users with message history are loaded
-        setTimeout(() => {
-          fetchRecentConversations();
-        }, 100);
+          setRecentChats((prev) => {
+            const exists = prev.some((c) => c._id === selectedChat._id);
+            if (!exists) {
+              const updated = [selectedChat, ...prev];
+              localStorage.setItem("recentChats_principal", JSON.stringify(updated));
+              return updated;
+            } else {
+              const filtered = prev.filter((c) => c._id !== selectedChat._id);
+              const updated = [selectedChat, ...filtered];
+              localStorage.setItem("recentChats_principal", JSON.stringify(updated));
+              return updated;
+            }
+          });
 
-        // Update last message for this individual chat
-        const text = sentMessage.message 
-          ? sentMessage.message 
-          : (sentMessage.fileUrl ? "File sent" : "");
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: "You: ", text }
-        }));
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: textMessage.message }
+          }));
+        }
+
+        // 2) Send each selected file as its own message with empty text
+        for (const file of (selectedFiles || [])) {
+          const fileForm = new FormData();
+          fileForm.append("senderId", currentUserId);
+          fileForm.append("receiverId", selectedChat._id);
+          fileForm.append("message", "");
+          fileForm.append("file", file);
+
+          const fileRes = await axios.post(`${API_BASE}/messages`, fileForm, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              "Authorization": `Bearer ${token}`
+            },
+          });
+
+          const fileMessage = fileRes.data;
+          socket.current.emit("sendMessage", {
+            senderId: currentUserId,
+            receiverId: selectedChat._id,
+            text: fileMessage.message,
+            fileUrl: fileMessage.fileUrl || null,
+            fileName: fileMessage.fileName || null,
+          });
+
+          setMessages((prev) => ({
+            ...prev,
+            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
+          }));
+
+          setLastMessages(prev => ({
+            ...prev,
+            [selectedChat._id]: { prefix: "You: ", text: fileMessage.fileUrl ? "File sent" : "" }
+          }));
+        }
 
         setNewMessage("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setTimeout(() => { fetchRecentConversations(); }, 60);
       } catch (err) {
         console.error("Error sending message:", err);
       } finally {
@@ -1519,14 +1563,145 @@ export default function Principal_Chats() {
                               <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-blue-900 text-white mt-0.5">
                                 {msg.message && <p>{msg.message}</p>}
                                 {msg.fileUrl && (
-                                  <a
-                                    href={`${API_BASE}/${msg.fileUrl}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="underline text-xs block mt-1 flex items-center gap-1"
-                                  >
-                                    🔗 File Attachment
-                                  </a>
+                                  <div className="mt-2">
+                                    {(() => {
+                                      // Check if fileUrl is already a full URL (Cloudinary) or relative path
+                                      const isFullUrl = msg.fileUrl.startsWith('http://') || msg.fileUrl.startsWith('https://');
+                                      const fileUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
+                                      
+                                      // Use stored fileName if available, otherwise try to extract from URL
+                                      let fileName = msg.fileName;
+                                      if (!fileName) {
+                                        // Try to extract filename from URL
+                                        const urlParts = msg.fileUrl.split('/');
+                                        const lastPart = urlParts[urlParts.length - 1].split('?')[0];
+                                        
+                                        // For Cloudinary raw files, we might need to guess the extension
+                                        // Check if it's a raw file (no extension in URL)
+                                        if (msg.fileUrl.includes('/raw/upload/')) {
+                                          // For raw files without extension, use a generic name
+                                          fileName = `attachment_${lastPart}`;
+                                        } else {
+                                          // Try to get extension from URL or use last part
+                                          fileName = lastPart;
+                                        }
+                                      }
+                                      const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                      const isExcel = /\.(xlsx|xls)$/i.test(fileName);
+                                      const isPDF = /\.(pdf)$/i.test(fileName);
+                                      const isWord = /\.(doc|docx)$/i.test(fileName);
+                                      const isPowerPoint = /\.(ppt|pptx)$/i.test(fileName);
+                                      
+                                      // Handle file download with proper filename
+                                      const handleFileDownload = async (e) => {
+                                        e.preventDefault();
+                                        try {
+                                          // For Cloudinary raw files, we need to fetch as arrayBuffer to preserve binary data
+                                          const isCloudinaryRaw = fileUrl.includes('res.cloudinary.com') && fileUrl.includes('/raw/upload/');
+                                          
+                                          let downloadUrl = fileUrl;
+                                          if (fileUrl.includes('res.cloudinary.com')) {
+                                            // Check if URL already has query parameters
+                                            const separator = fileUrl.includes('?') ? '&' : '?';
+                                            // Add fl_attachment with filename to force proper download
+                                            downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                          }
+                                          
+                                          // Fetch the file
+                                          const response = await fetch(downloadUrl, {
+                                            method: 'GET',
+                                            mode: 'cors',
+                                          });
+                                          
+                                          if (!response.ok) {
+                                            throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+                                          }
+                                          
+                                          let blob;
+                                          if (isCloudinaryRaw) {
+                                            // For raw files, fetch as arrayBuffer to preserve binary integrity
+                                            const arrayBuffer = await response.arrayBuffer();
+                                            // Determine MIME type from file extension or response header
+                                            let mimeType = response.headers.get('content-type') || 'application/octet-stream';
+                                            
+                                            // Override with more specific MIME type if we have file extension
+                                            if (fileName.endsWith('.xlsx')) {
+                                              mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                                            } else if (fileName.endsWith('.xls')) {
+                                              mimeType = 'application/vnd.ms-excel';
+                                            } else if (fileName.endsWith('.pdf')) {
+                                              mimeType = 'application/pdf';
+                                            } else if (fileName.endsWith('.docx')) {
+                                              mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                            } else if (fileName.endsWith('.doc')) {
+                                              mimeType = 'application/msword';
+                                            }
+                                            
+                                            blob = new Blob([arrayBuffer], { type: mimeType });
+                                          } else {
+                                            blob = await response.blob();
+                                          }
+                                          
+                                          // Create download link with proper filename
+                                          const blobUrl = window.URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = blobUrl;
+                                          link.download = fileName;
+                                          link.style.display = 'none';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          setTimeout(() => {
+                                            document.body.removeChild(link);
+                                            window.URL.revokeObjectURL(blobUrl);
+                                          }, 100);
+                                        } catch (error) {
+                                          console.error('Error downloading file:', error);
+                                          // Fallback: try direct download with Cloudinary attachment parameter
+                                          if (fileUrl.includes('res.cloudinary.com')) {
+                                            const separator = fileUrl.includes('?') ? '&' : '?';
+                                            const downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                            window.open(downloadUrl, '_blank');
+                                          } else {
+                                            window.open(fileUrl, '_blank');
+                                          }
+                                        }
+                                      };
+                                      
+                                      return isImage ? (
+                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleFileDownload}>
+                                          <img
+                                            src={fileUrl}
+                                            alt="Attachment preview"
+                                            className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
+                                            loading="lazy"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={fileUrl}
+                                          onClick={handleFileDownload}
+                                          className="text-blue-200 hover:text-blue-100 underline flex items-center gap-2 cursor-pointer"
+                                        >
+                                          {isExcel && "📊"}
+                                          {isPDF && "📄"}
+                                          {isWord && "📝"}
+                                          {isPowerPoint && "📊"}
+                                          {!isExcel && !isPDF && !isWord && !isPowerPoint && "📎"}
+                                          <span>
+                                            {isExcel ? "Excel File" : 
+                                             isPDF ? "PDF Document" :
+                                             isWord ? "Word Document" :
+                                             isPowerPoint ? "PowerPoint" :
+                                             "Attachment"}
+                                          </span>
+                                          <span className="text-xs opacity-75">
+                                            ({msg.fileName ? fileName : (fileName.startsWith('attachment_') ? 'File' : fileName)})
+                                          </span>
+                                        </a>
+                                      );
+                                    })()
+                                    }
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1556,14 +1731,145 @@ export default function Principal_Chats() {
                                   <div className="px-4 py-2 rounded-lg text-sm max-w-xs bg-gray-300 text-black w-fit mt-0.5">
                                     {msg.message && <p>{msg.message}</p>}
                                     {msg.fileUrl && (
-                                      <a
-                                        href={`${API_BASE}/${msg.fileUrl}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="underline text-xs block mt-1 flex items-center gap-1"
-                                      >
-                                        🔗 File Attachment
-                                      </a>
+                                      <div className="mt-2">
+                                        {(() => {
+                                          // Check if fileUrl is already a full URL (Cloudinary) or relative path
+                                          const isFullUrl = msg.fileUrl.startsWith('http://') || msg.fileUrl.startsWith('https://');
+                                          const fileUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
+                                          
+                                          // Use stored fileName if available, otherwise try to extract from URL
+                                          let fileName = msg.fileName;
+                                          if (!fileName) {
+                                            // Try to extract filename from URL
+                                            const urlParts = msg.fileUrl.split('/');
+                                            const lastPart = urlParts[urlParts.length - 1].split('?')[0];
+                                            
+                                            // For Cloudinary raw files, we might need to guess the extension
+                                            // Check if it's a raw file (no extension in URL)
+                                            if (msg.fileUrl.includes('/raw/upload/')) {
+                                              // For raw files without extension, use a generic name
+                                              fileName = `attachment_${lastPart}`;
+                                            } else {
+                                              // Try to get extension from URL or use last part
+                                              fileName = lastPart;
+                                            }
+                                          }
+                                          const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
+                                          const isExcel = /\.(xlsx|xls)$/i.test(fileName);
+                                          const isPDF = /\.(pdf)$/i.test(fileName);
+                                          const isWord = /\.(doc|docx)$/i.test(fileName);
+                                          const isPowerPoint = /\.(ppt|pptx)$/i.test(fileName);
+                                          
+                                          // Handle file download with proper filename
+                                          const handleFileDownload = async (e) => {
+                                            e.preventDefault();
+                                            try {
+                                              // For Cloudinary raw files, we need to fetch as arrayBuffer to preserve binary data
+                                              const isCloudinaryRaw = fileUrl.includes('res.cloudinary.com') && fileUrl.includes('/raw/upload/');
+                                              
+                                              let downloadUrl = fileUrl;
+                                              if (fileUrl.includes('res.cloudinary.com')) {
+                                                // Check if URL already has query parameters
+                                                const separator = fileUrl.includes('?') ? '&' : '?';
+                                                // Add fl_attachment with filename to force proper download
+                                                downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                              }
+                                              
+                                              // Fetch the file
+                                              const response = await fetch(downloadUrl, {
+                                                method: 'GET',
+                                                mode: 'cors',
+                                              });
+                                              
+                                              if (!response.ok) {
+                                                throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+                                              }
+                                              
+                                              let blob;
+                                              if (isCloudinaryRaw) {
+                                                // For raw files, fetch as arrayBuffer to preserve binary integrity
+                                                const arrayBuffer = await response.arrayBuffer();
+                                                // Determine MIME type from file extension or response header
+                                                let mimeType = response.headers.get('content-type') || 'application/octet-stream';
+                                                
+                                                // Override with more specific MIME type if we have file extension
+                                                if (fileName.endsWith('.xlsx')) {
+                                                  mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                                                } else if (fileName.endsWith('.xls')) {
+                                                  mimeType = 'application/vnd.ms-excel';
+                                                } else if (fileName.endsWith('.pdf')) {
+                                                  mimeType = 'application/pdf';
+                                                } else if (fileName.endsWith('.docx')) {
+                                                  mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                                } else if (fileName.endsWith('.doc')) {
+                                                  mimeType = 'application/msword';
+                                                }
+                                                
+                                                blob = new Blob([arrayBuffer], { type: mimeType });
+                                              } else {
+                                                blob = await response.blob();
+                                              }
+                                              
+                                              // Create download link with proper filename
+                                              const blobUrl = window.URL.createObjectURL(blob);
+                                              const link = document.createElement('a');
+                                              link.href = blobUrl;
+                                              link.download = fileName;
+                                              link.style.display = 'none';
+                                              document.body.appendChild(link);
+                                              link.click();
+                                              setTimeout(() => {
+                                                document.body.removeChild(link);
+                                                window.URL.revokeObjectURL(blobUrl);
+                                              }, 100);
+                                            } catch (error) {
+                                              console.error('Error downloading file:', error);
+                                              // Fallback: try direct download with Cloudinary attachment parameter
+                                              if (fileUrl.includes('res.cloudinary.com')) {
+                                                const separator = fileUrl.includes('?') ? '&' : '?';
+                                                const downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
+                                                window.open(downloadUrl, '_blank');
+                                              } else {
+                                                window.open(fileUrl, '_blank');
+                                              }
+                                            }
+                                          };
+                                          
+                                          return isImage ? (
+                                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleFileDownload}>
+                                              <img
+                                                src={fileUrl}
+                                                alt="Attachment preview"
+                                                className="rounded-md max-h-56 max-w-full object-contain border border-gray-300"
+                                                loading="lazy"
+                                              />
+                                            </a>
+                                          ) : (
+                                            <a
+                                              href={fileUrl}
+                                              onClick={handleFileDownload}
+                                              className="text-blue-600 hover:text-blue-800 underline flex items-center gap-2 cursor-pointer"
+                                            >
+                                              {isExcel && "📊"}
+                                              {isPDF && "📄"}
+                                              {isWord && "📝"}
+                                              {isPowerPoint && "📊"}
+                                              {!isExcel && !isPDF && !isWord && !isPowerPoint && "📎"}
+                                              <span>
+                                                {isExcel ? "Excel File" : 
+                                                 isPDF ? "PDF Document" :
+                                                 isWord ? "Word Document" :
+                                                 isPowerPoint ? "PowerPoint" :
+                                                 "Attachment"}
+                                              </span>
+                                              <span className="text-xs opacity-75">
+                                                ({msg.fileName ? fileName : (fileName.startsWith('attachment_') ? 'File' : fileName)})
+                                              </span>
+                                            </a>
+                                          );
+                                        })()
+                                        }
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -1609,6 +1915,7 @@ export default function Principal_Chats() {
                     ref={fileInputRef}
                     style={{ display: "none" }}
                     onChange={handleFileSelect}
+                    multiple
                     accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv,.ppt,.pptx"
                   />
 
@@ -1619,24 +1926,34 @@ export default function Principal_Chats() {
                     onClick={openFilePicker}
                   />
 
-                  {selectedFile && (
-                    <span className="text-xs text-gray-600 truncate max-w-[100px] flex items-center gap-1">
-                      📎 {selectedFile.name}
+                  {selectedFiles && selectedFiles.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedFiles.map((file, idx) => (
+                        <div key={`${file.name}-${file.size}-${file.lastModified}-${idx}`} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                          <span className="text-sm text-gray-700 truncate max-w-[100px]" title={file.name}>{file.name}</span>
+                          <button
+                            onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                       <button
-                        onClick={() => setSelectedFile(null)}
-                        className="ml-1 text-red-500 hover:text-red-700 text-xs"
-                        title="Remove file"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
                       >
-                        ❌
+                        + Add more
                       </button>
-                    </span>
+                    </div>
                   )}
 
                   <button
                     onClick={handleSendMessage}
-                    disabled={isSending || (!newMessage.trim() && !selectedFile)}
+                    disabled={isSending || (!newMessage.trim() && (!selectedFiles || selectedFiles.length === 0))}
                     className={`px-4 py-2 rounded-lg text-sm ${
-                      (newMessage.trim() || selectedFile) && !isSending ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
+                      (newMessage.trim() || (selectedFiles && selectedFiles.length > 0)) && !isSending ? "bg-blue-900 text-white" : "bg-gray-400 text-white cursor-not-allowed"
                     }`}
                   >
                     {isSending ? "Sending..." : "Send"}

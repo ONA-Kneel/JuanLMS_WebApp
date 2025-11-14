@@ -61,12 +61,32 @@ export const submissionStorage = new CloudinaryStorage({
   },
 });
 
+// Message storage - needs to handle both images and documents
+// Cloudinary requires different resource_type for different file types
 export const messageStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'juanlms/messages',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'mp4', 'mp3', 'xlsx', 'xls'],
-    resource_type: 'auto',
+  params: async (req, file) => {
+    // Determine resource_type based on file type
+    const isImage = file.mimetype && file.mimetype.startsWith('image/');
+    const isVideo = file.mimetype && file.mimetype.startsWith('video/');
+    const isAudio = file.mimetype && file.mimetype.startsWith('audio/');
+    
+    // For documents (xlsx, xls, pdf, doc, docx, etc.), use 'raw'
+    // For images, use 'image'
+    // For videos, use 'video'
+    // For audio, use 'video' (Cloudinary uses 'video' for audio too)
+    let resourceType = 'raw'; // Default for documents
+    if (isImage) {
+      resourceType = 'image';
+    } else if (isVideo || isAudio) {
+      resourceType = 'video';
+    }
+    
+    return {
+      folder: 'juanlms/messages',
+      resource_type: resourceType,
+      // Don't restrict formats - let Cloudinary handle it based on resource_type
+    };
   },
 });
 
