@@ -478,6 +478,8 @@ export default function Principal_FacultyReport() {
   const [loadingFacultyLogins, setLoadingFacultyLogins] = useState(false);
   const [facultyLoginsError, setFacultyLoginsError] = useState(null);
   const [facultyLoginsPage, setFacultyLoginsPage] = useState(1);
+  const [facultyLoginsSearch, setFacultyLoginsSearch] = useState("");
+  const [facultyLoginsStatusFilter, setFacultyLoginsStatusFilter] = useState("");
   const FACULTY_LOGINS_PER_PAGE = 7;
 
   // AI Analytics states
@@ -527,6 +529,7 @@ export default function Principal_FacultyReport() {
   const [sendReportError, setSendReportError] = useState(null);
   const [sentReports, setSentReports] = useState([]);
   const [loadingSentReports, setLoadingSentReports] = useState(false);
+  const [vpeReportsSearch, setVpeReportsSearch] = useState("");
 
   // Fetch saved AI analyses history when tab is active
   const fetchAnalysisHistory = useCallback(async () => {
@@ -1371,8 +1374,32 @@ export default function Principal_FacultyReport() {
     return '';
   };
 
+  // Helper to get status category for filtering
+  const getStatusCategory = (lastLogin) => {
+    if (!lastLogin) return 'no-login';
+    const now = new Date();
+    const loginDate = new Date(lastLogin);
+    const diffDays = Math.floor((now - loginDate) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 3) return 'inactive-3plus';
+    if (diffDays === 2) return 'inactive-2';
+    if (diffDays <= 1) return 'active';
+    return 'no-login';
+  };
+
+  // Filter and sort faculty logins
+  const filteredFacultyLogins = facultyLastLogins.filter(log => {
+    // Filter by search term (faculty name)
+    const matchesSearch = !facultyLoginsSearch.trim() || 
+      (log.userName && log.userName.toLowerCase().includes(facultyLoginsSearch.trim().toLowerCase()));
+    
+    // Filter by status (inactivity level)
+    const matchesStatus = !facultyLoginsStatusFilter || getStatusCategory(log.lastLogin) === facultyLoginsStatusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
   // Sort faculty logins: reds first, then yellow, then blue, then by most recent lastLogin
-  const sortedFacultyLogins = [...facultyLastLogins].sort((a, b) => {
+  const sortedFacultyLogins = [...filteredFacultyLogins].sort((a, b) => {
     const getPriority = (log) => {
       if (!log.lastLogin) return 3;
       const now = new Date();
@@ -1396,6 +1423,11 @@ export default function Principal_FacultyReport() {
     (facultyLoginsPage - 1) * FACULTY_LOGINS_PER_PAGE,
     facultyLoginsPage * FACULTY_LOGINS_PER_PAGE
   );
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setFacultyLoginsPage(1);
+  }, [facultyLoginsSearch, facultyLoginsStatusFilter]);
 
   // Render inline chart in modal when visible
   useEffect(() => {
@@ -2310,6 +2342,51 @@ export default function Principal_FacultyReport() {
             </div>
           ) : (
             <>
+              {/* Search and Filter Controls */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Search Faculty Name</label>
+                  <input
+                    type="text"
+                    value={facultyLoginsSearch}
+                    onChange={(e) => setFacultyLoginsSearch(e.target.value)}
+                    placeholder="Search by faculty name..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Login Status</label>
+                  <select
+                    value={facultyLoginsStatusFilter}
+                    onChange={(e) => setFacultyLoginsStatusFilter(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Status</option>
+                    <option value="inactive-3plus">3+ days inactive (Red)</option>
+                    <option value="inactive-2">2 days inactive (Yellow)</option>
+                    <option value="active">Active (≤1 day) (Blue)</option>
+                    <option value="no-login">No login recorded</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Results Summary */}
+              {facultyLoginsSearch || facultyLoginsStatusFilter ? (
+                <div className="mb-4 text-sm text-gray-600">
+                  Showing {sortedFacultyLogins.length} of {facultyLastLogins.length} faculty members
+                  {facultyLoginsSearch && ` matching "${facultyLoginsSearch}"`}
+                  {facultyLoginsStatusFilter && (
+                    <>
+                      {' with status: '}
+                      {facultyLoginsStatusFilter === 'inactive-3plus' && '3+ days inactive (Red)'}
+                      {facultyLoginsStatusFilter === 'inactive-2' && '2 days inactive (Yellow)'}
+                      {facultyLoginsStatusFilter === 'active' && 'Active (≤1 day) (Blue)'}
+                      {facultyLoginsStatusFilter === 'no-login' && 'No login recorded'}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
               <div className="overflow-x-auto border-2 border-[#00418B]">
                 <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
                   <thead>
@@ -2320,13 +2397,33 @@ export default function Principal_FacultyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedFacultyLogins.map((log, index) => (
-                      <tr key={log._id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} ${getRowColor(log.lastLogin)} transition`}>
-                        <td className="p-3 border-b border-[#00418B] text-gray-900 whitespace-nowrap">{log.userName}</td>
-                        <td className="p-3 border-b border-[#00418B] text-gray-700 whitespace-nowrap">{log.userRole}</td>
-                        <td className="p-3 border-b border-[#00418B] text-gray-500 whitespace-nowrap">{formatDate(log.lastLogin)}</td>
+                    {paginatedFacultyLogins.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="p-4 text-center text-gray-500">
+                          No faculty members found matching the current filters.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      paginatedFacultyLogins.map((log) => {
+                        const rowColor = getRowColor(log.lastLogin);
+                        return (
+                          <tr 
+                            key={log._id} 
+                            className={`${rowColor || 'bg-white'} hover:opacity-80 transition`}
+                          >
+                            <td className={`p-3 border-b border-[#00418B] whitespace-nowrap ${rowColor ? 'text-gray-900' : 'text-gray-900'}`}>
+                              {log.userName}
+                            </td>
+                            <td className={`p-3 border-b border-[#00418B] whitespace-nowrap ${rowColor ? 'text-gray-900' : 'text-gray-700'}`}>
+                              {log.userRole}
+                            </td>
+                            <td className={`p-3 border-b border-[#00418B] whitespace-nowrap ${rowColor ? 'text-gray-900' : 'text-gray-500'}`}>
+                              {formatDate(log.lastLogin)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2432,127 +2529,170 @@ export default function Principal_FacultyReport() {
             </div>
           )}
 
-          {activeTab === 'vpe-reports' && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-800">Send Reports to VPE</h3>
-                <button 
-                  onClick={() => setShowSendReportModal(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Send New Report
-                </button>
-              </div>
+          {activeTab === 'vpe-reports' && (() => {
+            // Filter reports based on search term
+            const filteredVpeReports = sentReports.filter(report => {
+              if (!vpeReportsSearch.trim()) return true;
+              const searchLower = vpeReportsSearch.trim().toLowerCase();
+              return (
+                (report.reportName && report.reportName.toLowerCase().includes(searchLower)) ||
+                (report.schoolYear && report.schoolYear.toLowerCase().includes(searchLower)) ||
+                (report.termName && report.termName.toLowerCase().includes(searchLower)) ||
+                (report.message && report.message.toLowerCase().includes(searchLower)) ||
+                (report.status && report.status.toLowerCase().includes(searchLower))
+              );
+            });
 
-              {loadingSentReports ? (
-                <div className="text-center py-8">
-                  <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
-                  <p className="mt-2 text-gray-600">Loading sent reports...</p>
-                </div>
-              ) : sendReportError ? (
-                <div className="text-center py-8 bg-red-50 rounded-lg">
-                  <p className="text-red-600">{sendReportError}</p>
-                  <button onClick={fetchSentReports} className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                    Retry
+            return (
+              <div>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                  <h3 className="text-xl font-semibold text-gray-800">Send Reports to VPE</h3>
+                  <button 
+                    onClick={() => setShowSendReportModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Send New Report
                   </button>
                 </div>
-              ) : sentReports.length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-lg">
-                  <p className="text-gray-600">No reports sent to VPE yet.</p>
-                  <p className="text-sm text-gray-500 mt-2">Click "Send New Report" to send your first report.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto border-2 border-[#00418B]">
-                  <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 text-left">
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Sent Date</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">School Year</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Term</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Report Name</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Message</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
-                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sentReports.map((report, index) => (
-                        <tr key={report.id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
-                            {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
-                          </td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.schoolYear}</td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.termName}</td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.reportName}</td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-normal max-w-xs truncate">
-                            {report.message || '-'}
-                          </td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
-                            <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                              report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                              report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
-                              'bg-gray-100 text-gray-700 border border-gray-200'
-                            }`}>
-                              {report.status}
-                            </span>
-                          </td>
-                          <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
-                            <button 
-                              onClick={async () => {
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  if (!token) {
-                                    alert('Please log in to download reports.');
-                                    return;
-                                  }
-                                  
-                                  // Use backend download route for proper authentication and filename handling
-                                  const response = await fetch(`${API_BASE}/api/vpe-reports/download/${report.id}`, {
-                                    method: 'GET',
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`
-                                    }
-                                  });
-                                  
-                                  if (!response.ok) {
-                                    const errorData = await response.json();
-                                    throw new Error(errorData.error || 'Failed to download report');
-                                  }
-                                  
-                                  // Get the blob from response
-                                  const blob = await response.blob();
-                                  
-                                  // Create download link with proper filename
-                                  const url = window.URL.createObjectURL(blob);
-                                  const link = document.createElement('a');
-                                  link.href = url;
-                                  link.download = report.reportName;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                  window.URL.revokeObjectURL(url);
-                                  
-                                } catch (error) {
-                                  console.error('Download error:', error);
-                                  alert(`Failed to download report: ${error.message}`);
-                                }
-                              }}
-                              className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                            >
-                              Download
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+
+                {loadingSentReports ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block w-8 h-8 border-4 border-blue-500 border-top-transparent rounded-full animate-spin"></div>
+                    <p className="mt-2 text-gray-600">Loading sent reports...</p>
+                  </div>
+                ) : sendReportError ? (
+                  <div className="text-center py-8 bg-red-50 rounded-lg">
+                    <p className="text-red-600">{sendReportError}</p>
+                    <button onClick={fetchSentReports} className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                      Retry
+                    </button>
+                  </div>
+                ) : sentReports.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <p className="text-gray-600">No reports sent to VPE yet.</p>
+                    <p className="text-sm text-gray-500 mt-2">Click "Send New Report" to send your first report.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Search Input */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Reports</label>
+                      <input
+                        type="text"
+                        value={vpeReportsSearch}
+                        onChange={(e) => setVpeReportsSearch(e.target.value)}
+                        placeholder="Search by report name, school year, term, message, or status..."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Results Summary */}
+                    {vpeReportsSearch && (
+                      <div className="mb-4 text-sm text-gray-600">
+                        Showing {filteredVpeReports.length} of {sentReports.length} reports
+                        {vpeReportsSearch && ` matching "${vpeReportsSearch}"`}
+                      </div>
+                    )}
+
+                    {filteredVpeReports.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-600">No reports found matching your search.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border-2 border-[#00418B]">
+                        <table className="min-w-full bg-white border-2 border-[#00418B] rounded-lg overflow-hidden text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 text-left">
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Sent Date</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">School Year</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Term</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Report Name</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Message</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Status</th>
+                              <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredVpeReports.map((report, index) => (
+                              <tr key={report.id} className={`${index % 2 === 0 ? "bg-white hover:bg-gray-50" : "bg-gray-50 hover:bg-gray-100"} transition`}>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
+                                  {report.sentAt ? new Date(report.sentAt).toLocaleString('en-US') : '-'}
+                                </td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.schoolYear}</td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.termName}</td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">{report.reportName}</td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-normal max-w-xs truncate">
+                                  {report.message || '-'}
+                                </td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
+                                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                    report.status === 'sent' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                                    report.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                    'bg-gray-100 text-gray-700 border border-gray-200'
+                                  }`}>
+                                    {report.status}
+                                  </span>
+                                </td>
+                                <td className="p-3 border-b border-[#00418B] whitespace-nowrap">
+                                  <button 
+                                    onClick={async () => {
+                                      try {
+                                        const token = localStorage.getItem('token');
+                                        if (!token) {
+                                          alert('Please log in to download reports.');
+                                          return;
+                                        }
+                                        
+                                        // Use backend download route for proper authentication and filename handling
+                                        const response = await fetch(`${API_BASE}/api/vpe-reports/download/${report.id}`, {
+                                          method: 'GET',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        });
+                                        
+                                        if (!response.ok) {
+                                          const errorData = await response.json();
+                                          throw new Error(errorData.error || 'Failed to download report');
+                                        }
+                                        
+                                        // Get the blob from response
+                                        const blob = await response.blob();
+                                        
+                                        // Create download link with proper filename
+                                        const url = window.URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = report.reportName;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        window.URL.revokeObjectURL(url);
+                                        
+                                      } catch (error) {
+                                        console.error('Download error:', error);
+                                        alert(`Failed to download report: ${error.message}`);
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                                  >
+                                    Download
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
           </div>
         </div>
       </div>
