@@ -311,6 +311,15 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     message: '',
     type: 'error'
   });
+  // State for general feedback modal (replaces window.alert)
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    confirmText: 'OK',
+    onConfirm: null
+  });
   const [validationResults, setValidationResults] = useState({
     tracks: { valid: 0, invalid: 0, details: [] },
     strands: { valid: 0, invalid: 0, details: [] },
@@ -339,6 +348,31 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       message: '',
       type: 'error'
     });
+  };
+
+  const showFeedbackModal = (
+    title,
+    message,
+    type = 'info',
+    options = {}
+  ) => {
+    setFeedbackModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      confirmText: options.confirmText || 'OK',
+      onConfirm: options.onConfirm || null
+    });
+  };
+
+  const closeFeedbackModal = () => {
+    setFeedbackModal(prev => ({
+      ...prev,
+      isOpen: false,
+      onConfirm: null,
+      confirmText: 'OK'
+    }));
   };
 
   const tabs = [
@@ -635,7 +669,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
           }).catch(() => {});
         } catch {}
-        window.alert('Track added successfully!');
+        showFeedbackModal('Track Added', 'Track added successfully!', 'success');
         setTrackFormData({ trackName: '', trackType: '' }); // Clear form
         setShowTrackModal(false); // Close modal
       } else {
@@ -717,7 +751,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Track updated successfully!');
+          showFeedbackModal('Track Updated', 'Track updated successfully!', 'success');
           setIsEditMode(false);
           setEditingTrack(null);
           setTrackFormData({ trackName: '', trackType: '' });
@@ -806,7 +840,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             }).catch(() => {});
           } catch {}
           
-          window.alert('Track and all connected data deleted successfully!');
+          showFeedbackModal(
+            'Track Deleted',
+            'Track and all connected data deleted successfully!',
+            'success'
+          );
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Track', data.message || 'Failed to delete track', 'error');
@@ -874,7 +912,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             })
           }).catch(() => {});
         } catch {}
-        window.alert('Strand added successfully!');
+        showFeedbackModal('Strand Added', 'Strand added successfully!', 'success');
         setStrandFormData({ trackId: '', strandName: '', strandType: '' }); // Clear form
         setIsStrandModalOpen(false); // Close modal
       } else {
@@ -971,7 +1009,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Strand updated successfully!');
+          showFeedbackModal('Strand Updated', 'Strand updated successfully!', 'success');
           setIsStrandEditMode(false);
           setEditingStrand(null);
           setStrandFormData({ trackId: '', strandName: '', strandType: '' });
@@ -1058,7 +1096,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             }).catch(() => {});
           } catch {}
           
-          window.alert('Strand and all connected data deleted successfully!');
+          showFeedbackModal(
+            'Strand Deleted',
+            'Strand and all connected data deleted successfully!',
+            'success'
+          );
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Strand', data.message || 'Failed to delete strand', 'error');
@@ -1157,7 +1199,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             })
           }).catch(() => {});
         } catch {}
-        window.alert('Section added successfully!');
+        showFeedbackModal('Section Added', 'Section added successfully!', 'success');
         setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' }); // Clear form
       } else {
         const data = await res.json();
@@ -1251,7 +1293,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Section updated successfully!');
+          showFeedbackModal('Section Updated', 'Section updated successfully!', 'success');
           setIsSectionEditMode(false);
           setEditingSection(null);
           setSectionFormData({ trackId: '', strandId: '', sectionName: '', sectionCode: '', gradeLevel: '' }); // Clear form including gradeLevel
@@ -1333,7 +1375,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             }).catch(() => {});
           } catch {}
           
-          window.alert('Section and all connected data deleted successfully!');
+          showFeedbackModal(
+            'Section Deleted',
+            'Section and all connected data deleted successfully!',
+            'success'
+          );
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Section', data.message || 'Failed to delete section', 'error');
@@ -1885,7 +1931,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             })
           }).catch(() => {});
         } catch {}
-        window.alert('Faculty assigned successfully!');
+        showFeedbackModal('Faculty Assigned', 'Faculty assigned successfully!', 'success');
         fetchFacultyAssignments(); // Refresh assignments list using the new API
         setFacultyFormData({ facultyId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '', subjectName: '' }); // Clear form
         setFacultySearchTerm(''); // Clear search term
@@ -2013,7 +2059,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Faculty assignment updated successfully!');
+          showFeedbackModal(
+            'Assignment Updated',
+            'Faculty assignment updated successfully!',
+            'success'
+          );
           fetchFacultyAssignments(); // Refresh assignments list
           setIsFacultyEditMode(false);
           setEditingFacultyAssignment(null);
@@ -2071,7 +2121,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Faculty assignment removed successfully!');
+          showFeedbackModal(
+            'Assignment Removed',
+            'Faculty assignment removed successfully!',
+            'success'
+          );
           fetchFacultyAssignments(); // Refresh assignments list
         } else {
           const data = await res.json();
@@ -2114,7 +2168,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Faculty assignment unarchived successfully!');
+          showFeedbackModal(
+            'Assignment Restored',
+            'Faculty assignment unarchived successfully!',
+            'success'
+          );
           fetchFacultyAssignments(); // Refresh assignments list
         } else {
           const data = await res.json();
@@ -2236,7 +2294,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             })
           }).catch(() => {});
         } catch {}
-        window.alert('Student assigned successfully!');
+        showFeedbackModal('Student Assigned', 'Student assigned successfully!', 'success');
         fetchStudentAssignments();
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
         setStudentSearchTerm('');
@@ -2363,7 +2421,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Student assignment updated successfully!');
+          showFeedbackModal(
+            'Assignment Updated',
+            'Student assignment updated successfully!',
+            'success'
+          );
           fetchStudentAssignments();
           setIsStudentEditMode(false);
           setEditingStudentAssignment(null);
@@ -2423,7 +2485,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Student assignment removed successfully!');
+          showFeedbackModal(
+            'Assignment Removed',
+            'Student assignment removed successfully!',
+            'success'
+          );
           fetchStudentAssignments();
         } else {
           const data = await res.json();
@@ -2466,7 +2532,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               })
             }).catch(() => {});
           } catch {}
-          window.alert('Student assignment unarchived successfully!');
+          showFeedbackModal(
+            'Assignment Restored',
+            'Student assignment unarchived successfully!',
+            'success'
+          );
           fetchStudentAssignments(); // Refresh assignments list
         } else {
           const data = await res.json();
@@ -2866,7 +2936,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
     } catch (error) {
       console.error('Error generating comprehensive PDF report:', error);
-      window.alert('Error generating comprehensive PDF report. Please try again.');
+      showFeedbackModal(
+        'PDF Generation Failed',
+        'Error generating comprehensive PDF report. Please try again.',
+        'error'
+      );
     } finally {
       setExportingPDF(false);
     }
@@ -3110,11 +3184,19 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       XLSX.writeFile(wb, filename);
       
       console.log('Comprehensive report generated successfully!');
-      window.alert('Comprehensive report generated successfully!');
+      showFeedbackModal(
+        'Report Generated',
+        'Comprehensive report generated successfully!',
+        'success'
+      );
       
     } catch (error) {
       console.error('Error generating comprehensive report:', error);
-      window.alert('Error generating comprehensive report. Please try again.');
+      showFeedbackModal(
+        'Report Generation Failed',
+        'Error generating comprehensive report. Please try again.',
+        'error'
+      );
     }
   };
 
@@ -3357,7 +3439,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             })
           }).catch(() => {});
         } catch {}
-        window.alert(`${validTracks.length} tracks uploaded successfully!`);
+        showFeedbackModal(
+          'Tracks Uploaded',
+          `${validTracks.length} tracks uploaded successfully!`,
+          'success'
+        );
         setExcelFile(null);
         setPreviewModalOpen(false);
         // Reset the file input
@@ -3664,7 +3750,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       setStrands([...strands, ...createdStrands]);
-      window.alert(`${validStrands.length} strands uploaded successfully!`);
+      showFeedbackModal(
+        'Strands Uploaded',
+        `${validStrands.length} strands uploaded successfully!`,
+        'success'
+      );
       setStrandExcelFile(null);
       setStrandPreviewModalOpen(false);
       // Reset the file input
@@ -4028,7 +4118,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           })
         }).catch(() => {});
       } catch {}
-      window.alert(`${validSections.length} sections uploaded successfully!`);
+      showFeedbackModal(
+        'Sections Uploaded',
+        `${validSections.length} sections uploaded successfully!`,
+        'success'
+      );
       setSectionExcelFile(null);
       setSectionPreviewModalOpen(false);
       // Reset the file input
@@ -4580,7 +4674,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           })
         }).catch(() => {});
       } catch {}
-      window.alert(`${createdAssignments.length} faculty assignment(s) uploaded successfully!`);
+      showFeedbackModal(
+        'Faculty Upload Complete',
+        `${createdAssignments.length} faculty assignment(s) uploaded successfully!`,
+        'success'
+      );
       setFacultyAssignmentExcelFile(null);
       setFacultyAssignmentPreviewModalOpen(false);
       document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
@@ -5252,7 +5350,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           })
         }).catch(() => {});
       } catch {}
-      window.alert(`${createdAssignments.length} student assignment(s) uploaded successfully!`);
+      showFeedbackModal(
+        'Student Upload Complete',
+        `${createdAssignments.length} student assignment(s) uploaded successfully!`,
+        'success'
+      );
       setStudentExcelFile(null);
       setStudentPreviewModalOpen(false);
       document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
@@ -5356,7 +5458,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           }).catch(() => {});
         } catch {}
         setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
-        window.alert('Subject added successfully!');
+        showFeedbackModal('Subject Added', 'Subject added successfully!', 'success');
       } else {
         const data = await res.json();
         console.error('Subject creation failed:', data);
@@ -5442,7 +5544,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setIsSubjectEditMode(false);
         setEditingSubject(null);
         setSubjectFormData({ subjectName: '', trackName: '', strandName: '', gradeLevel: '' });
-        window.alert('Subject updated successfully!');
+        showFeedbackModal('Subject Updated', 'Subject updated successfully!', 'success');
       } else {
         const data = await res.json();
         const errorMessage = data.message || 'Failed to update subject';
@@ -5527,7 +5629,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             }).catch(() => {});
           } catch {}
           
-          window.alert('Subject and all connected data deleted successfully!');
+          showFeedbackModal(
+            'Subject Deleted',
+            'Subject and all connected data deleted successfully!',
+            'success'
+          );
         } else {
           const data = await deleteRes.json();
           setSubjectError(data.message || 'Failed to delete subject');
@@ -5884,7 +5990,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       console.log('Skipped subjects:', skippedSubjects);
       
       if (newSubjectsData.length === 0) {
-        window.alert('All subjects already exist in the system. No new subjects were created.');
+        showFeedbackModal(
+          'No New Subjects',
+          'All subjects already exist in the system. No new subjects were created.',
+          'info'
+        );
         setSubjectExcelFile(null);
         setSubjectPreviewModalOpen(false);
         document.querySelector('input[type="file"][accept=".xlsx,.xls"]').value = '';
@@ -5914,7 +6024,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             message += `\n• ${subject.subjectName} (${subject.trackName} - ${subject.strandName} - ${subject.gradeLevel})`;
           });
         }
-        window.alert(message);
+        showFeedbackModal('Subjects Uploaded', message, 'success');
       } else {
         const data = await res.json();
         console.error('Bulk subject creation failed:', {
@@ -5990,8 +6100,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting tracks to Excel:', error);
-      // Optionally, show an alert to the user
-      alert('Failed to extract tracks to Excel. Please try again.');
+      showFeedbackModal(
+        'Track Export Failed',
+        'Failed to extract tracks to Excel. Please try again.',
+        'error'
+      );
     }
   };
   const extractStrandsToExcel = () => {
@@ -6031,7 +6144,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting strands to Excel:', error);
-      alert('Failed to extract strands to Excel. Please try again.');
+      showFeedbackModal(
+        'Strand Export Failed',
+        'Failed to extract strands to Excel. Please try again.',
+        'error'
+      );
     }
   };
 
@@ -6070,7 +6187,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting sections to Excel:', error);
-      alert('Failed to extract sections to Excel. Please try again.');
+      showFeedbackModal(
+        'Section Export Failed',
+        'Failed to extract sections to Excel. Please try again.',
+        'error'
+      );
     }
   };
   const extractSubjectsToExcel = () => {
@@ -6108,7 +6229,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting subjects to Excel:', error);
-      alert('Failed to extract subjects to Excel. Please try again.');
+      showFeedbackModal(
+        'Subject Export Failed',
+        'Failed to extract subjects to Excel. Please try again.',
+        'error'
+      );
     }
   };
   const extractFacultiesToExcel = () => {
@@ -6149,7 +6274,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting faculty assignments to Excel:', error);
-      alert('Failed to extract faculty assignments to Excel. Please try again.');
+      showFeedbackModal(
+        'Faculty Export Failed',
+        'Failed to extract faculty assignments to Excel. Please try again.',
+        'error'
+      );
     }
   };
 
@@ -6196,7 +6325,11 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch {}
     } catch (error) {
       console.error('Error extracting student assignments to Excel:', error);
-      alert('Failed to extract student assignments to Excel. Please try again.');
+      showFeedbackModal(
+        'Student Export Failed',
+        'Failed to extract student assignments to Excel. Please try again.',
+        'error'
+      );
     }
   };
   const handleImportExcelFile = async (e) => {
@@ -6788,7 +6921,8 @@ Validation issues (${skippedCount} items):
 - ${skippedMessages.join('\n- ')}`;
       }
 
-      window.alert(alertMessage);
+      const alertType = skippedCount > 0 ? 'warning' : 'success';
+      showFeedbackModal('Import Summary', alertMessage, alertType);
 
       setImportModalOpen(false);
       setImportExcelFile(null);
@@ -7049,7 +7183,7 @@ Validation issues (${skippedCount} items):
       );
 
       if (allStudents.length === 0) {
-        alert('No students found to export.');
+        showFeedbackModal('No Students Found', 'No students found to export.', 'info');
         return;
       }
 
@@ -7122,7 +7256,11 @@ Validation issues (${skippedCount} items):
       XLSX.writeFile(wb, fileName);
     } catch (error) {
       console.error('Error exporting student assignments:', error);
-      alert('Error exporting student assignments. Please try again.');
+      showFeedbackModal(
+        'Export Failed',
+        'Error exporting student assignments. Please try again.',
+        'error'
+      );
     }
   };
 
@@ -7135,7 +7273,7 @@ Validation issues (${skippedCount} items):
       );
 
       if (allStudents.length === 0) {
-        alert('No students found to export.');
+        showFeedbackModal('No Students Found', 'No students found to export.', 'info');
         return;
       }
 
@@ -7159,7 +7297,11 @@ Validation issues (${skippedCount} items):
       XLSX.writeFile(wb, fileName);
     } catch (error) {
       console.error('Error exporting classlist:', error);
-      alert('Error exporting classlist. Please try again.');
+      showFeedbackModal(
+        'Classlist Export Failed',
+        'Error exporting classlist. Please try again.',
+        'error'
+      );
     }
   };
 
@@ -10446,12 +10588,21 @@ Validation issues (${skippedCount} items):
       )}
 
       <ValidationModal
-  isOpen={errorValidationModal.isOpen}
-  onClose={closeErrorValidationModal}
-  title={errorValidationModal.title}
-  message={errorValidationModal.message}
-  type={errorValidationModal.type}
-/>
+        isOpen={errorValidationModal.isOpen}
+        onClose={closeErrorValidationModal}
+        title={errorValidationModal.title}
+        message={errorValidationModal.message}
+        type={errorValidationModal.type}
+      />
+      <ValidationModal
+        isOpen={feedbackModal.isOpen}
+        onClose={closeFeedbackModal}
+        title={feedbackModal.title}
+        message={feedbackModal.message}
+        type={feedbackModal.type}
+        onConfirm={feedbackModal.onConfirm}
+        confirmText={feedbackModal.confirmText}
+      />
     </div>
   );
 }
