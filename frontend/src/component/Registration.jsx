@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ValidationModal from './ValidationModal';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 export default function Registration() {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     personalEmail: '',
+    schoolEmail: '', // School email for verification (studentSchoolEmail from assignment)
     schoolID: '',
     role: 'students',
     trackName: '',
@@ -89,7 +90,8 @@ export default function Registration() {
     setForm(prev => ({
       ...prev,
       schoolID: student.studentSchoolID,
-      personalEmail: student.personalEmail || prev.personalEmail, // Preserve existing email if student doesn't have one
+      schoolEmail: student.studentSchoolEmail || student.email || prev.schoolEmail, // Use school email from assignment
+      personalEmail: student.personalEmail || prev.personalEmail, // Preserve existing personal email if student doesn't have one
       firstName: student.firstName,
       lastName: student.lastName,
       trackName: student.trackName,
@@ -111,7 +113,11 @@ export default function Registration() {
 
   // Function to check student details from StudentAssignment
   const checkStudentDetails = async () => {
-    if (!form.schoolID || !form.personalEmail) {
+    // Trim and validate inputs
+    const trimmedSchoolID = (form.schoolID || '').trim();
+    const trimmedSchoolEmail = (form.schoolEmail || '').trim();
+    
+    if (!trimmedSchoolID || !trimmedSchoolEmail) {
       setValidationModal({ 
         isOpen: true, 
         type: 'warning', 
@@ -121,7 +127,7 @@ export default function Registration() {
       return;
     }
 
-    if (!isValidSchoolId(form.schoolID)) {
+    if (!isValidSchoolId(trimmedSchoolID)) {
       setValidationModal({ 
         isOpen: true, 
         type: 'warning', 
@@ -131,23 +137,24 @@ export default function Registration() {
       return;
     }
 
-    // Validate email format for SJDEFI domains
-    const emailRegex = /^[^\s@]+@(sjdefi\.edu\.ph|students\.sjdefi\.edu\.ph)$/;
-    if (!emailRegex.test(form.personalEmail)) {
+    // Validate school email format (sjdefilms.com domain)
+    const schoolEmailRegex = /^[^\s@]+@sjdefilms\.com$/;
+    if (!schoolEmailRegex.test(trimmedSchoolEmail)) {
       setValidationModal({ 
         isOpen: true, 
         type: 'warning', 
-        title: 'Invalid Email', 
-        message: 'Please enter a valid SJDEFI email address (e.g., username@sjdefi.edu.ph or username@students.sjdefi.edu.ph).' 
+        title: 'Invalid School Email', 
+        message: 'Please enter a valid school email address (e.g., students.firstname.lastname@sjdefilms.com).' 
       });
       return;
     }
 
     try {
       setIsCheckingStudent(true);
+      // Send trimmed values to backend
       const response = await axios.post(`${API_BASE}/api/registrants/student-details`, {
-        schoolID: form.schoolID,
-        personalEmail: form.personalEmail
+        schoolID: trimmedSchoolID,
+        schoolEmail: trimmedSchoolEmail
       });
 
       if (response.data) {
@@ -159,7 +166,8 @@ export default function Registration() {
           lastName: response.data.lastName,
           trackName: response.data.trackName,
           strandName: response.data.strandName,
-          sectionName: response.data.sectionName
+          sectionName: response.data.sectionName,
+          personalEmail: response.data.personalEmail || prev.personalEmail // Keep school email or use provided personal email
         }));
         
         setValidationModal({ 
@@ -174,7 +182,7 @@ export default function Registration() {
       let errorMessage = 'Student not found in our records.';
       if (error.response) {
         if (error.response.status === 404) {
-          errorMessage = 'Student not found in assignment records. Please verify your School ID and Email, or contact the registrar.';
+          errorMessage = error.response.data.message || 'Student not found. Please verify that your School ID and School Email match the records in our system.';
         } else {
           errorMessage = error.response.data.message || 'Failed to verify student details.';
         }
@@ -347,7 +355,7 @@ export default function Registration() {
                 </svg>
                 <div className="text-sm text-blue-800">
                   <p className="font-medium mb-1">Student Verification Required</p>
-                  <p className="text-blue-700">Please select your Student ID from the dropdown or enter your School ID and School Email to verify your enrollment and load your details.</p>
+                  <p className="text-blue-700">Please select your Student ID from the dropdown or enter your School ID and School Email (from your student assignment) to verify your enrollment and load your details.</p>
                 </div>
               </div>
             </div>
@@ -374,14 +382,23 @@ export default function Registration() {
               <label className="block text-base mb-2">School Email<span className="text-red-500">*</span></label>
               <input 
                 type="email" 
-                name="personalEmail" 
+                name="schoolEmail" 
                 required 
-                placeholder="username@sjdefi.edu.ph" 
-                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
-                value={form.personalEmail} 
+                placeholder="students.firstname.lastname@sjdefilms.com" 
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  form.schoolEmail && !/^[^\s@]+@sjdefilms\.com$/.test(form.schoolEmail.trim())
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : 'border-blue-900'
+                }`}
+                value={form.schoolEmail} 
                 onChange={handleChange} 
-                disabled={loading || isCheckingStudent} 
+                disabled={loading || isCheckingStudent || !!studentDetails} 
               />
+              <p className="text-xs text-gray-500 mt-1">
+                {form.schoolEmail && !/^[^\s@]+@sjdefilms\.com$/.test(form.schoolEmail.trim())
+                  ? 'Invalid format. Must be @sjdefilms.com'
+                  : 'Enter your school email from your student assignment'}
+              </p>
             </div>
             <div className="relative">
               <label className="block text-base mb-2">Student ID<span className="text-red-500">*</span></label>
@@ -389,17 +406,26 @@ export default function Registration() {
                 type="text" 
                 name="schoolID" 
                 required 
-                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 ${
+                  form.schoolID && !isValidSchoolId(form.schoolID.trim())
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : 'border-blue-900 focus:ring-blue-500'
+                }`}
                 value={form.schoolID} 
                 onChange={handleChange} 
-                disabled={loading || isCheckingStudent} 
+                disabled={loading || isCheckingStudent || !!studentDetails} 
                 placeholder={getSchoolIdPlaceholder()} 
                 onFocus={() => {
-                  if (form.schoolID.length >= 1) {
+                  if (form.schoolID && form.schoolID.length >= 1) {
                     filterStudents(form.schoolID);
                   }
                 }}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                {form.schoolID && !isValidSchoolId(form.schoolID.trim())
+                  ? 'Invalid format. Must be YY-00000 (e.g., 25-00001)'
+                  : 'Enter your student ID (e.g., 25-00001)'}
+              </p>
               
               {/* Student ID Dropdown */}
               {showStudentDropdown && filteredStudents.length > 0 && (
@@ -478,17 +504,50 @@ export default function Registration() {
             </div>
           </div>
 
-          {/* Verification button - only show when student details not loaded */}
-          {!studentDetails && (
-            <button 
-              type="button" 
-              onClick={checkStudentDetails} 
-              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition" 
-              disabled={loading || isCheckingStudent}
-            >
-              {isCheckingStudent ? 'Verifying...' : 'Verify Student Details'}
-            </button>
+          {/* Personal Email field - only show when student details are loaded */}
+          {studentDetails && (
+            <div>
+              <label className="block text-base mb-2">Personal Email (SJDEFI)<span className="text-red-500">*</span></label>
+              <input 
+                type="email" 
+                name="personalEmail" 
+                required 
+                placeholder="username@sjdefi.edu.ph" 
+                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
+                value={form.personalEmail} 
+                onChange={handleChange} 
+                disabled={loading} 
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter your SJDEFI personal email address for registration</p>
+            </div>
           )}
+
+          {/* Verification button - only show when student details not loaded */}
+          {!studentDetails && (() => {
+            // Check if both fields are filled and valid
+            const trimmedSchoolID = (form.schoolID || '').trim();
+            const trimmedSchoolEmail = (form.schoolEmail || '').trim();
+            const isSchoolIDValid = trimmedSchoolID && isValidSchoolId(trimmedSchoolID);
+            const schoolEmailRegex = /^[^\s@]+@sjdefilms\.com$/;
+            const isSchoolEmailValid = trimmedSchoolEmail && schoolEmailRegex.test(trimmedSchoolEmail);
+            const canVerify = isSchoolIDValid && isSchoolEmailValid;
+            
+            return (
+              <button 
+                type="button" 
+                onClick={checkStudentDetails} 
+                className={`w-full p-3 rounded-lg transition ${
+                  canVerify 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                disabled={loading || isCheckingStudent || !canVerify}
+                title={!canVerify ? 'Please enter both a valid School ID and School Email to verify' : ''}
+              >
+                {isCheckingStudent ? 'Verifying...' : 'Verify Student Details'}
+              </button>
+            );
+          })()}
 
           {/* Privacy Policy Agreement - only show when student details are loaded */}
           {studentDetails && (

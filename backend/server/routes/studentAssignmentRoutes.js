@@ -21,6 +21,39 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const assignments = await StudentAssignment.find(query).populate('studentId');
 
+    // Collect unique schoolIDs from manual entries for bulk email lookup
+    const manualEntrySchoolIDs = [...new Set(
+      assignments
+        .filter(a => !a.studentId && a.studentSchoolID)
+        .map(a => a.studentSchoolID)
+    )];
+
+    // Bulk lookup emails for manual entries (if schoolID is encrypted in User model)
+    const emailMap = new Map();
+    if (manualEntrySchoolIDs.length > 0) {
+      try {
+        // Try to find users by schoolID - note: schoolID might be encrypted in User model
+        // So we need to check if we can find them directly or need to decrypt
+        const usersWithEmails = await User.find({
+          role: 'students'
+        }).select('schoolID email');
+        
+        usersWithEmails.forEach(user => {
+          try {
+            const decryptedSchoolID = user.getDecryptedSchoolID ? user.getDecryptedSchoolID() : user.schoolID;
+            if (manualEntrySchoolIDs.includes(decryptedSchoolID)) {
+              const email = user.getDecryptedEmail ? user.getDecryptedEmail() : user.email;
+              emailMap.set(decryptedSchoolID, email);
+            }
+          } catch (err) {
+            // Skip if decryption fails
+          }
+        });
+      } catch (err) {
+        console.error('Error bulk looking up users by schoolID for email:', err);
+      }
+    }
+
     // Transform data to include student names directly and support manual entries
     const transformedAssignments = assignments.map(assignment => {
       if (assignment.studentId && assignment.studentId.firstname && assignment.studentId.lastname) {
@@ -35,7 +68,8 @@ router.get('/', authenticateToken, async (req, res) => {
           termId: assignment.termId,
           status: assignment.status,
           schoolID: assignment.studentSchoolID || '',
-          email: assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email,
+          email: assignment.studentSchoolEmail || (assignment.studentId.getDecryptedEmail ? assignment.studentId.getDecryptedEmail() : assignment.studentId.email) || '',
+          studentSchoolEmail: assignment.studentSchoolEmail || '',
           middlename: assignment.studentId.getDecryptedMiddlename ? assignment.studentId.getDecryptedMiddlename() : assignment.studentId.middlename,
           firstname: assignment.studentId.getDecryptedFirstname ? assignment.studentId.getDecryptedFirstname() : assignment.studentId.firstname,
           lastname: assignment.studentId.getDecryptedLastname ? assignment.studentId.getDecryptedLastname() : assignment.studentId.lastname,
@@ -46,7 +80,9 @@ router.get('/', authenticateToken, async (req, res) => {
           isApproved: assignment.status === 'active'
         };
       }
-      // Manual entry (no linked user)
+      // Manual entry (no linked user) - get email from assignment field or lookup map
+      const email = assignment.studentSchoolEmail || (assignment.studentSchoolID ? (emailMap.get(assignment.studentSchoolID) || '') : '');
+      
       return {
         _id: assignment._id,
         studentId: assignment.studentId || null,
@@ -58,6 +94,8 @@ router.get('/', authenticateToken, async (req, res) => {
         termId: assignment.termId,
         status: assignment.status,
         schoolID: assignment.studentSchoolID || '',
+        email: email,
+        studentSchoolEmail: assignment.studentSchoolEmail || '',
         enrollmentNo: assignment.enrollmentNo || '',
         enrollmentDate: assignment.enrollmentDate || null,
         firstname: assignment.firstName || '',
@@ -78,7 +116,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Create a new student assignment
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType, subjects: customSubjects } = req.body;
+    const { studentId, studentName, studentSchoolID, studentSchoolEmail, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType, subjects: customSubjects } = req.body;
     console.log('Request body debug:', { studentId, studentName, studentSchoolID, firstName, lastName, trackName, strandName, sectionName, gradeLevel, termId, quarterName, enrollmentNo, enrollmentDate });
     console.log('Enrollment data specifically:', { enrollmentNo, enrollmentDate, type: typeof enrollmentNo });
 
@@ -257,6 +295,7 @@ router.post('/', authenticateToken, async (req, res) => {
       studentId: actualStudentId || undefined,
       studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
       studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+      studentSchoolEmail: studentSchoolEmail || undefined,
       firstName: !actualStudentId ? firstName : undefined,
       lastName: !actualStudentId ? lastName : undefined,
       enrollmentNo: enrollmentNo || undefined,
@@ -334,7 +373,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   const errors = [];
 
   for (const assignmentData of assignments) {
-    const { studentId, studentName, studentSchoolID, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType } = assignmentData;
+    const { studentId, studentName, studentSchoolID, studentSchoolEmail, trackName, strandName, sectionName, gradeLevel, termId, quarterName, firstName, lastName, enrollmentNo, enrollmentDate, enrollmentType } = assignmentData;
 
     try {
       const term = await Term.findById(termId);
@@ -429,6 +468,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         studentId: actualStudentId || undefined,
         studentName: !actualStudentId ? (fullStudentName || `Student ${studentSchoolID}`) : undefined,
         studentSchoolID: !actualStudentId ? studentSchoolID : undefined,
+        studentSchoolEmail: studentSchoolEmail || undefined,
         firstName: !actualStudentId ? firstName : undefined,
         lastName: !actualStudentId ? lastName : undefined,
         enrollmentNo: enrollmentNo || undefined,
@@ -509,7 +549,7 @@ router.patch('/:id/unarchive', authenticateToken, async (req, res) => {
 // Update a student assignment (e.g., if track/strand/section changes)
 router.patch('/:id', authenticateToken, async (req, res) => {
   try {
-    const { trackName, strandName, sectionName, gradeLevel, termId, quarterName } = req.body;
+    const { trackName, strandName, sectionName, gradeLevel, termId, quarterName, studentSchoolEmail, studentSchoolID, studentId, studentName, firstName, lastName, enrollmentNo, enrollmentDate } = req.body;
 
     const assignment = await StudentAssignment.findById(req.params.id);
     if (!assignment) {
@@ -532,6 +572,34 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     assignment.termName = term.termName;
     if (quarterName !== undefined) {
       assignment.quarterName = quarterName;
+    }
+    
+    // Update student school email if provided
+    if (studentSchoolEmail !== undefined) {
+      assignment.studentSchoolEmail = studentSchoolEmail || undefined;
+    }
+    
+    // Update student information if provided
+    if (studentSchoolID !== undefined) {
+      assignment.studentSchoolID = studentSchoolID || undefined;
+    }
+    if (studentId !== undefined) {
+      assignment.studentId = studentId || undefined;
+    }
+    if (studentName !== undefined) {
+      assignment.studentName = studentName || undefined;
+    }
+    if (firstName !== undefined) {
+      assignment.firstName = firstName || undefined;
+    }
+    if (lastName !== undefined) {
+      assignment.lastName = lastName || undefined;
+    }
+    if (enrollmentNo !== undefined) {
+      assignment.enrollmentNo = enrollmentNo || undefined;
+    }
+    if (enrollmentDate !== undefined) {
+      assignment.enrollmentDate = enrollmentDate || undefined;
     }
 
     // Update subjects if track, strand, or grade level changed

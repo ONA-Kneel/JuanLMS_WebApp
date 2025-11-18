@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
@@ -183,6 +183,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   const [facultySearchResults, setFacultySearchResults] = useState([]); // Separate state for search results
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
   const [studentManualId, setStudentManualId] = useState('');
+  const [studentSchoolEmail, setStudentSchoolEmail] = useState('');
   const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
   const [studentSearchResults, setStudentSearchResults] = useState([]); // Separate state for search results
 
@@ -1604,19 +1605,57 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     setStudentManualId(e.target.value);
   };
 
+  // Helper function to clean names for email generation (same as backend)
+  const clean = (str) => (str || '').toLowerCase().replace(/[^\p{L}0-9]/gu, '');
+
+  // Auto-generate student email based on first name and last name
+  useEffect(() => {
+    // Generate email if we have both first name and last name
+    if (studentFormData.firstName && studentFormData.lastName) {
+      const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
+      // Always generate email when firstName and lastName are available
+      // This ensures email is always present for new entries
+      setStudentSchoolEmail(prevEmail => {
+        // If no student is selected, always use generated email
+        // If student is selected but email is empty, use generated email
+        if (!studentFormData.studentId || !prevEmail) {
+          return generatedEmail;
+        }
+        // If student is selected and has email, keep it
+        return prevEmail;
+      });
+    } else if (!studentFormData.firstName || !studentFormData.lastName) {
+      // Clear email if first name or last name is missing (only if no student is selected)
+      if (!studentFormData.studentId) {
+        setStudentSchoolEmail('');
+      }
+    }
+  }, [studentFormData.firstName, studentFormData.lastName, studentFormData.studentId]);
+
   // Handle selection of a student from suggestions
   const handleSelectStudent = (student) => {
-    // Clear any existing manual data first
+    const firstName = student.firstname || student.firstName || 'Unknown';
+    const lastName = student.lastname || student.lastName || 'Student';
+    
+    // Keep firstName and lastName populated so we can generate email if needed
     setStudentFormData(prev => ({ 
       ...prev, 
       studentId: student._id,
-      firstName: '',
-      lastName: ''
+      firstName: firstName,
+      lastName: lastName
     }));
-    const firstName = student.firstname || student.firstName || 'Unknown';
-    const lastName = student.lastname || student.lastName || 'Student';
     setStudentSearchTerm(`${firstName} ${lastName} (${student.schoolID})`);
     setStudentManualId(student.schoolID); // Also populate the school ID field
+    
+    // Populate school email: use student's email if available, otherwise generate one
+    const studentEmail = student.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '';
+    if (studentEmail) {
+      setStudentSchoolEmail(studentEmail);
+    } else {
+      // Generate email if student doesn't have one
+      const generatedEmail = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
+      setStudentSchoolEmail(generatedEmail);
+    }
     setShowStudentSuggestions(false);
     setStudentSearchResults([]);
     console.log('✅ Selected student:', `${firstName} ${lastName}`);
@@ -2205,16 +2244,68 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     setStudentError('');
 
-    // Check if we have required student information
-    const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
-    if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Provide student information.');
-      return;
+    // Comprehensive validation
+    const validationErrors = [];
+
+    // Validate student information
+    if (studentFormData.studentId) {
+      // If student is selected, verify it exists
+      const studentToAssign = students.find(s => s._id === studentFormData.studentId);
+      if (!studentToAssign) {
+        validationErrors.push('Selected student not found. Please select a valid student.');
+      }
+    } else {
+      // For manual entry, validate all required fields
+      if (!studentFormData.firstName || !studentFormData.firstName.trim()) {
+        validationErrors.push('First Name is required.');
+      }
+      if (!studentFormData.lastName || !studentFormData.lastName.trim()) {
+        validationErrors.push('Last Name is required.');
+      }
+      if (!studentManualId || !studentManualId.trim()) {
+        validationErrors.push('Student School ID is required.');
+      }
+    }
+
+    // Validate track selection
+    if (!studentFormData.trackId) {
+      validationErrors.push('Track selection is required.');
+    }
+
+    // Validate strand selection
+    if (!studentFormData.strandId) {
+      validationErrors.push('Strand selection is required.');
+    }
+
+    // Validate section selection
+    if (!studentFormData.sectionIds || studentFormData.sectionIds.length === 0) {
+      validationErrors.push('Section selection is required.');
+    }
+
+    // Validate grade level
+    if (!studentFormData.gradeLevel) {
+      validationErrors.push('Grade Level is required.');
+    }
+
+    // Validate email (should be generated if not present)
+    if (!studentSchoolEmail || !studentSchoolEmail.trim()) {
+      if (studentFormData.firstName && studentFormData.lastName) {
+        // Email should be auto-generated, but if it's not, generate it now
+        const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
+        setStudentSchoolEmail(generatedEmail);
+      } else if (!studentFormData.studentId) {
+        validationErrors.push('Email is required. Please ensure first name and last name are provided.');
+      }
     }
 
     // Validate irregular student requirements
-    if (isIrregularStudent && selectedSubjects.length === 0) {
-      setStudentError('Please select at least one subject for irregular student.');
+    if (isIrregularStudent && (!selectedSubjects || selectedSubjects.length === 0)) {
+      validationErrors.push('Please select at least one subject for irregular student.');
+    }
+
+    // If there are validation errors, display them and return
+    if (validationErrors.length > 0) {
+      setStudentError(validationErrors.join(' '));
       return;
     }
 
@@ -2224,7 +2315,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     const selectedSection = sections.find(sec => sec._id === studentFormData.sectionIds[0]);
 
     if (!selectedTrack || !selectedStrand || !selectedSection) {
-      setStudentError('Invalid selections for student assignment.');
+      setStudentError('Invalid selections for student assignment. Please ensure Track, Strand, and Section are valid.');
       return;
     }
 
@@ -2264,12 +2355,32 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           };
           
           let finalPayload;
+          // Generate email if not already set and we have firstName/lastName
+          let emailToSend = studentSchoolEmail.trim();
+          if (!emailToSend && studentFormData.firstName && studentFormData.lastName) {
+            emailToSend = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
+          }
+          
           if (studentToAssign) {
+            // If email is still empty, try to get from student object
+            if (!emailToSend && studentToAssign.email) {
+              emailToSend = studentToAssign.getDecryptedEmail ? studentToAssign.getDecryptedEmail() : studentToAssign.email;
+            }
+            // If still empty, generate from student's name
+            if (!emailToSend) {
+              const firstName = studentToAssign.firstname || studentToAssign.firstName || '';
+              const lastName = studentToAssign.lastname || studentToAssign.lastName || '';
+              if (firstName && lastName) {
+                emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
+              }
+            }
+            
             finalPayload = { 
               ...basePayload, 
               studentId: studentToAssign._id,
               studentName: `${studentToAssign.firstname || studentToAssign.firstName} ${studentToAssign.lastname || studentToAssign.lastName}`,
               studentSchoolID: studentToAssign.schoolID,
+              studentSchoolEmail: emailToSend || undefined,
               enrollmentNo: studentFormData.enrollmentNo || undefined,
               enrollmentDate: studentFormData.enrollmentDate || undefined
             };
@@ -2285,6 +2396,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             };
           if (manualSchoolId) {
               finalPayload.studentSchoolID = manualSchoolId;
+          }
+          // Always include email if we have one
+          if (emailToSend) {
+              finalPayload.studentSchoolEmail = emailToSend;
           }
           }
           
@@ -2315,6 +2430,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
         setStudentSearchTerm('');
         setStudentManualId('');
+        setStudentSchoolEmail('');
         setIsIrregularStudent(false);
         setSelectedSubjects([]);
         setAvailableSubjects([]);
@@ -2378,6 +2494,10 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     const schoolId = assignment.studentSchoolID || assignment.schoolID || student?.schoolID || '';
     setStudentManualId(schoolId);
 
+    // Set student school email
+    const email = assignment.email || assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
+    setStudentSchoolEmail(email);
+
     // Populate all form fields
     setStudentFormData({
       studentId: assignment.studentId || '',
@@ -2431,16 +2551,68 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     e.preventDefault();
     setStudentError('');
 
-    // Check if we have either studentId or manual entry (firstName/lastName)
-    const hasStudentInfo = Boolean(studentFormData.studentId) || (studentFormData.firstName && studentFormData.lastName);
-    if (!hasStudentInfo || !studentFormData.trackId || !studentFormData.strandId || studentFormData.sectionIds.length === 0 || !studentFormData.gradeLevel) {
-      setStudentError('All fields are required for student assignment. Provide student information.');
-      return;
+    // Comprehensive validation
+    const validationErrors = [];
+
+    // Validate student information
+    if (studentFormData.studentId) {
+      // If student is selected, verify it exists
+      const studentToAssign = students.find(s => s._id === studentFormData.studentId);
+      if (!studentToAssign) {
+        validationErrors.push('Selected student not found. Please select a valid student.');
+      }
+    } else {
+      // For manual entry, validate all required fields
+      if (!studentFormData.firstName || !studentFormData.firstName.trim()) {
+        validationErrors.push('First Name is required.');
+      }
+      if (!studentFormData.lastName || !studentFormData.lastName.trim()) {
+        validationErrors.push('Last Name is required.');
+      }
+      if (!studentManualId || !studentManualId.trim()) {
+        validationErrors.push('Student School ID is required.');
+      }
+    }
+
+    // Validate track selection
+    if (!studentFormData.trackId) {
+      validationErrors.push('Track selection is required.');
+    }
+
+    // Validate strand selection
+    if (!studentFormData.strandId) {
+      validationErrors.push('Strand selection is required.');
+    }
+
+    // Validate section selection
+    if (!studentFormData.sectionIds || studentFormData.sectionIds.length === 0) {
+      validationErrors.push('Section selection is required.');
+    }
+
+    // Validate grade level
+    if (!studentFormData.gradeLevel) {
+      validationErrors.push('Grade Level is required.');
+    }
+
+    // Validate email (should be generated if not present)
+    if (!studentSchoolEmail || !studentSchoolEmail.trim()) {
+      if (studentFormData.firstName && studentFormData.lastName) {
+        // Email should be auto-generated, but if it's not, generate it now
+        const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
+        setStudentSchoolEmail(generatedEmail);
+      } else if (!studentFormData.studentId) {
+        validationErrors.push('Email is required. Please ensure first name and last name are provided.');
+      }
     }
 
     // Validate irregular student requirements
-    if (isIrregularStudent && selectedSubjects.length === 0) {
-      setStudentError('Please select at least one subject for irregular student.');
+    if (isIrregularStudent && (!selectedSubjects || selectedSubjects.length === 0)) {
+      validationErrors.push('Please select at least one subject for irregular student.');
+    }
+
+    // If there are validation errors, display them and return
+    if (validationErrors.length > 0) {
+      setStudentError(validationErrors.join(' '));
       return;
     }
 
@@ -2449,7 +2621,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     const selectedSection = sections.find(sec => sec._id === studentFormData.sectionIds[0]);
 
     if (!selectedTrack || !selectedStrand || !selectedSection) {
-      setStudentError('Invalid selections for student assignment.');
+      setStudentError('Invalid selections for student assignment. Please ensure Track, Strand, and Section are valid.');
       return;
     }
 
@@ -2480,6 +2652,12 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           updatePayload.subjects = selectedSubjects;
         }
 
+        // Generate email if not already set and we have firstName/lastName
+        let emailToSend = studentSchoolEmail.trim();
+        if (!emailToSend && studentFormData.firstName && studentFormData.lastName) {
+          emailToSend = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
+        }
+        
         // Add student info based on whether it's an existing student or manual entry
         if (studentToAssign) {
           // Update student name and school ID if student exists
@@ -2489,12 +2667,31 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           } else if (studentManualId) {
             updatePayload.studentSchoolID = studentManualId;
           }
+          // Update school email - try to get from student object if not already set
+          if (!emailToSend && studentToAssign.email) {
+            emailToSend = studentToAssign.getDecryptedEmail ? studentToAssign.getDecryptedEmail() : studentToAssign.email;
+          }
+          // If still empty, generate from student's name
+          if (!emailToSend) {
+            const firstName = studentToAssign.firstname || studentToAssign.firstName || '';
+            const lastName = studentToAssign.lastname || studentToAssign.lastName || '';
+            if (firstName && lastName) {
+              emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
+            }
+          }
+          if (emailToSend) {
+            updatePayload.studentSchoolEmail = emailToSend;
+          }
         } else if (studentFormData.firstName || studentFormData.lastName) {
           // Manual entry - send firstName/lastName instead of studentId
           updatePayload.firstName = studentFormData.firstName;
           updatePayload.lastName = studentFormData.lastName;
           if (studentManualId) {
             updatePayload.studentSchoolID = studentManualId;
+          }
+          // Always include email if we have one
+          if (emailToSend) {
+            updatePayload.studentSchoolEmail = emailToSend;
           }
         }
 
@@ -3214,16 +3411,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       
       // 7. STUDENT ASSIGNMENTS SHEET
       const studentAssignmentsData = [
-        ['Student Name', 'Student School ID', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
+        ['Student Name', 'Student School ID', 'Student School Email', 'Track Name', 'Strand Name', 'Section Name', 'Grade Level', 'Status', 'Approval Status', 'School Year', 'Term Name', 'Created At']
       ].concat(
         studentAssignments.filter(sa => sa.status === 'active').map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
           const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+          const email = assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
           const approvalStatus = isStudentApproved(assignment) ? 'Approved' : 'Pending Approval';
           
           return [
             assignment.firstName && assignment.lastName ? `${assignment.firstName} ${assignment.lastName}` : assignment.studentName || 'Unknown',
             schoolId,
+            email,
             assignment.trackName,
             assignment.strandName,
             assignment.sectionName,
@@ -4885,7 +5084,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Academic Year: ${termDetails.schoolYear}`],
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'], // Updated format
+        ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'], // Updated format with email
       ]);
       
       // Set column widths
@@ -4893,6 +5092,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         { wch: 15 }, // enrollment_no
         { wch: 12 }, // date
         { wch: 15 }, // student_no
+        { wch: 30 }, // student_school_email
         { wch: 20 }, // last_name
         { wch: 20 }, // first_name
         { wch: 20 }, // track
@@ -4917,14 +5117,17 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         [`Term: ${termDetails.termName}`],
         [''], // Empty row
         // Student data headers
-        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        ['Student N.', 'Student ID', 'Student School Email', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
         // Student data rows
         ...currentStudentAssignments.map((assignment, index) => {
           const student = students.find(s => s._id === assignment.studentId);
+          const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+          const email = assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
           const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
           return [
             `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
-            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            schoolId,
+            email,
             assignment.enrollmentNo || 'N/A',
             assignment.enrollmentDate ? 
               new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
@@ -4944,7 +5147,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
       const currentStudentAssignmentsWs = XLSX.utils.aoa_to_sheet(currentStudentAssignmentsData);
       const saWscols = [
-        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }
+        { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 }
       ];
       currentStudentAssignmentsWs['!cols'] = saWscols;
       XLSX.utils.book_append_sheet(wb, currentStudentAssignmentsWs, 'Current Enrolled Students');
@@ -5262,7 +5465,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Find the actual header row
-      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade'];
+      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'strand', 'section', 'grade'];
       const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
       
       // Get data rows starting after the header row
@@ -5278,7 +5481,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       console.log("Actual Headers from Excel:", actualHeaders);
 
       // Define expected headers and create a mapping for flexible matching (San Juan format)
-      const expectedHeadersMap = {
+      // Required headers
+      const requiredHeadersMap = {
         'enrollment_no': '',
         'date': '',
         'student_no': '',
@@ -5288,9 +5492,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         'section': '',
         'grade': '',
       };
+      // Optional headers
+      const optionalHeadersMap = {
+        'student_school_email': '',
+      };
       const headerMapping = {};
 
-      for (const expectedKey of Object.keys(expectedHeadersMap)) {
+      // Check required headers
+      for (const expectedKey of Object.keys(requiredHeadersMap)) {
         const foundHeader = actualHeaders.find(actual => 
           actual.toLowerCase() === expectedKey.toLowerCase() ||
           actual.toLowerCase().includes(expectedKey.toLowerCase()) ||
@@ -5301,6 +5510,18 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else {
           setStudentExcelError(`Missing required header: "${expectedKey}". Please ensure your Excel file includes this column.`);
           return;
+        }
+      }
+      
+      // Check optional headers (email)
+      for (const expectedKey of Object.keys(optionalHeadersMap)) {
+        const foundHeader = actualHeaders.find(actual => 
+          actual.toLowerCase() === expectedKey.toLowerCase() ||
+          actual.toLowerCase().includes(expectedKey.toLowerCase()) ||
+          expectedKey.toLowerCase().includes(actual.toLowerCase())
+        );
+        if (foundHeader) {
+          headerMapping[expectedKey] = foundHeader;
         }
       }
       console.log("Header Mapping (Expected to Actual):", headerMapping);
@@ -5381,11 +5602,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
         const enrollmentNo = assignment['enrollment_no'] || '';
         let enrollmentDate = assignment['date'] || '';
+        // Get email from Excel if provided, otherwise will be generated
+        const emailFromExcel = assignment['student_school_email'] || assignment['Student School Email'] || '';
         
         // Debug logging for enrollment data
         console.log(`Processing student ${firstName} ${lastName}:`, {
           enrollmentNo,
           enrollmentDate,
+          emailFromExcel,
           rawAssignment: assignment
         });
         
@@ -5409,9 +5633,19 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               enrollmentType: 'Regular'
             };
             
+            // Use email from Excel if provided, otherwise generate email for student
+            let emailToSend = emailFromExcel.trim();
+            if (!emailToSend && firstName && lastName) {
+              emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
+            }
+            
             if (studentId) {
-              // Existing student - send studentId
-              return { ...basePayload, studentId: studentId };
+              // Existing student - send studentId and email if available
+              const payload = { ...basePayload, studentId: studentId };
+              if (emailToSend) {
+                payload.studentSchoolEmail = emailToSend;
+              }
+              return payload;
             } else {
               // New student - send student info directly (same as manual assignment)
               const payload = { 
@@ -5423,6 +5657,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               };
               if (studentSchoolID) {
                 payload.studentSchoolID = studentSchoolID;
+              }
+              if (emailToSend) {
+                payload.studentSchoolEmail = emailToSend;
               }
               return payload;
             }
@@ -6403,22 +6640,27 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const wb = XLSX.utils.book_new();
       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
       const studentAssignmentData = [
-        ['enrollment_no', 'date', 'student_no', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'],
-        ...currentStudentAssignments.map((assignment, index) => [
-          assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
-          assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
-          assignment.schoolID || '', // Use school ID
-          assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
-          assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
-          assignment.strandName,
-          assignment.sectionName,
-          assignment.gradeLevel || '',
-          assignment.status
-        ])
+        ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'strand', 'section', 'grade', 'status'],
+        ...currentStudentAssignments.map((assignment, index) => {
+          const student = students.find(s => s._id === assignment.studentId);
+          const email = assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
+          return [
+            assignment.enrollmentNo || (7180 - index), // Use enrollment number or generate sequential
+            assignment.enrollmentDate || '10/3/2024', // Use enrollment date or default
+            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '', // Use school ID
+            email, // Student school email
+            assignment.studentName ? assignment.studentName.split(' ').slice(-1)[0] : '', // Last name
+            assignment.studentName ? assignment.studentName.split(' ').slice(0, -1).join(' ') : '', // First name
+            assignment.strandName,
+            assignment.sectionName,
+            assignment.gradeLevel || '',
+            assignment.status
+          ];
+        })
       ];
       const ws = XLSX.utils.aoa_to_sheet(studentAssignmentData);
       const wsCols = [
-        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+        { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
       ];
       ws['!cols'] = wsCols;
       XLSX.utils.book_append_sheet(wb, ws, 'Enrolled Students');
@@ -7334,14 +7576,17 @@ Validation issues (${skippedCount} items):
         ['Strand:', 'All Strands'],
         [],
         // Student data headers
-        ['Student N.', 'Student ID', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
+        ['Student N.', 'Student ID', 'Student School Email', 'Enrollment No.', 'Enrollment Date', 'Last Name', 'First Name', 'Strand', 'Section', 'Grade', 'Status'],
         // Student data rows
         ...allStudents.map(assignment => {
           const student = students.find(s => s._id === assignment.studentId);
+          const schoolId = student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '';
+          const email = assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
           const status = isStudentApproved(assignment) ? 'Active' : 'Pending Approval';
           return [
             `${assignment.lastname || ''} ${assignment.firstname || ''}`.trim() || 'Unknown',
-            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+            schoolId,
+            email,
             assignment.enrollmentNo || 'N/A',
             assignment.enrollmentDate ? 
               new Date(assignment.enrollmentDate).toLocaleDateString('en-US', {
@@ -7617,16 +7862,21 @@ Validation issues (${skippedCount} items):
                       // Extract Enrolled Students
                       const currentStudentAssignments = studentAssignments.filter(sa => sa.status === 'active');
                       const studentAssignmentData = [
-                        ['Student School ID', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
-                        ...currentStudentAssignments.map(assignment => [
-                          assignment.schoolID || '',
-                          assignment.studentName,
-                          assignment.gradeLevel || '',
-                          assignment.trackName,
-                          assignment.strandName,
-                          assignment.sectionName,
-                          assignment.status
-                        ])
+                        ['Student School ID', 'Student School Email', 'Student Name', 'Grade Level', 'Track Name', 'Strand Name', 'Section Name', 'Status'],
+                        ...currentStudentAssignments.map(assignment => {
+                          const student = students.find(s => s._id === assignment.studentId);
+                          const email = assignment.studentSchoolEmail || (student?.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '') || '';
+                          return [
+                            student?.schoolID || assignment.studentSchoolID || assignment.schoolID || '',
+                            email,
+                            assignment.studentName,
+                            assignment.gradeLevel || '',
+                            assignment.trackName,
+                            assignment.strandName,
+                            assignment.sectionName,
+                            assignment.status
+                          ];
+                        })
                       ];
                       const studentWs = XLSX.utils.aoa_to_sheet(studentAssignmentData);
                       const studentWsWithHeader = addHeaderToSheet(studentWs, 'Enrolled Students');
@@ -9508,9 +9758,9 @@ Validation issues (${skippedCount} items):
                           setIsStudentEditMode(false);
                           setEditingStudentAssignment(null);
                           setStudentFormData({ studentId: '', trackId: '', strandId: '', sectionIds: [], gradeLevel: '' });
-          setIsIrregularStudent(false);
-          setSelectedSubjects([]);
-          setAvailableSubjects([]);
+                          setIsIrregularStudent(false);
+                          setSelectedSubjects([]);
+                          setAvailableSubjects([]);
                           setStudentSearchTerm('');
                         }}
                       >
@@ -9610,6 +9860,19 @@ Validation issues (${skippedCount} items):
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="YY-00000 or any ID"
                               disabled={termDetails.status === 'archived'}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="studentSchoolEmail" className="block text-sm font-medium text-gray-700 mb-1">Student School Email</label>
+                            <input
+                              type="email"
+                              id="studentSchoolEmail"
+                              value={studentSchoolEmail}
+                              readOnly
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
+                              placeholder="Auto-generated from first name and last name"
+                              disabled={termDetails.status === 'archived'}
+                              title="Email is auto-generated from first name and last name"
                             />
                           </div>
                         </div>
@@ -9814,6 +10077,8 @@ Validation issues (${skippedCount} items):
           setSelectedSubjects([]);
           setAvailableSubjects([]);
                                 setStudentSearchTerm('');
+                                setStudentManualId('');
+                                setStudentSchoolEmail('');
                                 setIsStudentModalOpen(false);
                               }}
                               className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md"
@@ -9941,6 +10206,7 @@ Validation issues (${skippedCount} items):
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Enrollment No.</th>
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Enrollment Date</th>
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Student No.</th>
+                        <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Student Email</th>
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Last Name</th>
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">First Name</th>
                         <th className="p-3 border-b border-[#00418B] font-semibold text-gray-700">Strand</th>
@@ -9954,13 +10220,29 @@ Validation issues (${skippedCount} items):
                     <tbody>
                       {filteredStudentAssignments.length === 0 ? (
                         <tr>
-                          <td colSpan="11" className="p-3 border-b border-[#00418B] text-center text-gray-500">
+                          <td colSpan="12" className="p-3 border-b border-[#00418B] text-center text-gray-500">
                             No student assignments found.
                           </td>
                         </tr>
                       ) : (
                         paginate(filteredStudentAssignments, studentAssignPage, ROWS_PER_PAGE).slice.map((assignment) => {
                           const student = students.find(s => s._id === assignment.studentId);
+                          
+                          // Get student email from assignment or student
+                          // Priority: assignment.email (from backend) > assignment.studentSchoolEmail > student object email
+                          let studentEmail = '';
+                          if (assignment.email) {
+                            studentEmail = assignment.email;
+                          } else if (assignment.studentSchoolEmail) {
+                            studentEmail = assignment.studentSchoolEmail;
+                          } else if (student) {
+                            // Try to get email from student object
+                            if (student.getDecryptedEmail) {
+                              studentEmail = student.getDecryptedEmail();
+                            } else if (student.email) {
+                              studentEmail = student.email;
+                            }
+                          }
                           
                           // Debug logging for enrollment type
                           console.log('🔍 Assignment Debug:', {
@@ -9985,6 +10267,7 @@ Validation issues (${skippedCount} items):
                                 }
                               </td>
                               <td className="p-3 border-b border-[#00418B]">{student?.schoolID || assignment.studentSchoolID || assignment.schoolID || ''}</td>
+                              <td className="p-3 border-b border-[#00418B]">{studentEmail || '-'}</td>
                               <td className="p-3 border-b border-[#00418B]">{assignment.lastname || assignment.studentName?.split(' ').slice(-1)[0] || 'N/A'}</td>
                               <td className="p-3 border-b border-[#00418B]">{assignment.firstname || assignment.studentName?.split(' ')[0] || 'N/A'}</td>
                               <td className="p-3 border-b border-[#00418B]">{assignment.strandName}</td>

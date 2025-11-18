@@ -825,7 +825,7 @@ router.get('/student-options', async (req, res) => {
     // Get all student assignments with basic info for dropdown
     const studentAssignments = await StudentAssignment.find({
       status: 'active'
-    }).select('studentSchoolID studentName firstName lastName trackName strandName sectionName personalEmail');
+    }).select('studentSchoolID studentSchoolEmail studentName firstName lastName trackName strandName sectionName personalEmail');
     
     console.log('Raw student assignments from DB:', studentAssignments.length);
     
@@ -837,6 +837,7 @@ router.get('/student-options', async (req, res) => {
       )
       .map(assignment => ({
         studentSchoolID: assignment.studentSchoolID,
+        studentSchoolEmail: assignment.studentSchoolEmail || '',
         studentName: assignment.studentName || `${assignment.firstName} ${assignment.lastName}`,
         firstName: assignment.firstName || '',
         lastName: assignment.lastName || '',
@@ -854,30 +855,50 @@ router.get('/student-options', async (req, res) => {
   }
 });
 
-// GET /api/registrants/student-details - Get student details from StudentAssignment by school ID and email
+// GET /api/registrants/student-details - Get student details from StudentAssignment by school ID and school email
 router.post('/student-details', async (req, res) => {
   try {
-    const { schoolID, personalEmail } = req.body;
+    const { schoolID, schoolEmail } = req.body;
     
-    if (!schoolID || !personalEmail) {
-      return res.status(400).json({ message: 'School ID and personal email are required' });
+    if (!schoolID || !schoolEmail) {
+      return res.status(400).json({ message: 'School ID and School Email are required' });
     }
     
     // Import StudentAssignment model
     const StudentAssignment = (await import('../models/StudentAssignment.js')).default;
     
-    // Find student assignment by school ID and email
+    // Normalize inputs for comparison
+    const normalizedSchoolID = schoolID.trim();
+    const normalizedSchoolEmail = schoolEmail.trim().toLowerCase();
+    
+    // Find student assignment by school ID first
+    // Must have both studentSchoolID and studentSchoolEmail present
     const studentAssignment = await StudentAssignment.findOne({
-      studentSchoolID: schoolID,
-      $or: [
-        { studentName: { $regex: personalEmail, $options: 'i' } }, // In case email is stored in studentName
-        { firstName: { $regex: personalEmail, $options: 'i' } },  // In case email is stored in firstName
-        { lastName: { $regex: personalEmail, $options: 'i' } }    // In case email is stored in lastName
-      ]
+      studentSchoolID: normalizedSchoolID,
+      studentSchoolEmail: { 
+        $exists: true,
+        $ne: null,
+        $ne: ''
+      }
     });
     
+    // Verify both school ID and school email match exactly (case-insensitive)
     if (!studentAssignment) {
-      return res.status(404).json({ message: 'Student not found in assignment records' });
+      return res.status(404).json({ message: 'Student not found. Please verify that your School ID and School Email match the records in our system.' });
+    }
+    
+    // Double-check: verify the email matches exactly (case-insensitive)
+    const assignmentEmail = (studentAssignment.studentSchoolEmail || '').trim().toLowerCase();
+    if (assignmentEmail !== normalizedSchoolEmail) {
+      console.log(`Email mismatch: provided="${normalizedSchoolEmail}", found="${assignmentEmail}"`);
+      return res.status(404).json({ message: 'Student not found. Please verify that your School ID and School Email match the records in our system.' });
+    }
+    
+    // Verify school ID matches
+    const assignmentSchoolID = (studentAssignment.studentSchoolID || '').trim();
+    if (assignmentSchoolID !== normalizedSchoolID) {
+      console.log(`School ID mismatch: provided="${normalizedSchoolID}", found="${assignmentSchoolID}"`);
+      return res.status(404).json({ message: 'Student not found. Please verify that your School ID and School Email match the records in our system.' });
     }
     
     // Return student details
@@ -885,7 +906,7 @@ router.post('/student-details', async (req, res) => {
       firstName: studentAssignment.firstName,
       middleName: '', // StudentAssignment doesn't have middleName field
       lastName: studentAssignment.lastName,
-      personalEmail: personalEmail, // Use the provided email
+      personalEmail: schoolEmail, // Use the provided school email
       schoolID: studentAssignment.studentSchoolID,
       trackName: studentAssignment.trackName,
       strandName: studentAssignment.strandName,
