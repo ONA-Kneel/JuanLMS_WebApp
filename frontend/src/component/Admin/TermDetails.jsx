@@ -4,7 +4,7 @@ import Admin_Navbar from './Admin_Navbar';
 import ProfileMenu from '../ProfileMenu';
 import { getLogoBase64, getFooterLogoBase64 } from '../../utils/imageToBase64';
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
 // Import icons
 import editIcon from "../../assets/editing.png";
