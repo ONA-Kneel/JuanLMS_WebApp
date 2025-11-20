@@ -16,7 +16,7 @@ const router = express.Router();
 router.post('/register', async (req, res) => {
   try {
     const { firstName, middleName, lastName, personalEmail, contactNo, schoolID, trackName, strandName, sectionName } = req.body;
-    if (!firstName || !lastName || !personalEmail || !schoolID) {
+    if (!firstName || !lastName || !schoolID) {
       return res.status(400).json({ message: 'Please fill in all required fields.' });
     }
     // Validate schoolID format
@@ -28,9 +28,12 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Contact number must be exactly 11 digits and contain only numbers.' });
     }
     
-    // Check for existing registrant with same email
-    const existingRegistrant = await Registrant.findOne({ personalEmail });
-    console.log(`[POST /api/registrants/register] Checking for existing registrant with email ${personalEmail}:`, existingRegistrant ? { exists: true, status: existingRegistrant.status, schoolID: existingRegistrant.schoolID } : { exists: false });
+    // Check for existing registrant with same email (only if personalEmail is provided)
+    let existingRegistrant = null;
+    if (personalEmail) {
+      existingRegistrant = await Registrant.findOne({ personalEmail });
+      console.log(`[POST /api/registrants/register] Checking for existing registrant with email ${personalEmail}:`, existingRegistrant ? { exists: true, status: existingRegistrant.status, schoolID: existingRegistrant.schoolID } : { exists: false });
+    }
     
     if (existingRegistrant) {
       // If registrant exists and was rejected, allow re-registration by updating the existing record
@@ -257,21 +260,25 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     registrant.processedBy = req.body && req.body.adminId ? req.body.adminId : null;
     await registrant.save();
     
-    // Send acceptance email via Brevo using EmailService
+    // Send acceptance email via Brevo using EmailService (only if personalEmail is provided)
     let brevoResult = null;
-    try {
-      const emailService = await import('../services/emailService.js');
-      console.log("About to send acceptance email to registrant");
-      brevoResult = await emailService.default.sendWelcomeEmail(
-        registrant.personalEmail,
-        registrant.firstName,
-        schoolEmail,
-        tempPassword
-      );
-      console.log("Acceptance email sent to registrant:", brevoResult.message);
-    } catch (emailErr) {
-      console.error('Error sending acceptance email via Brevo:', emailErr);
-      brevoResult = { success: false, message: 'Failed to send acceptance email' };
+    if (registrant.personalEmail) {
+      try {
+        const emailService = await import('../services/emailService.js');
+        console.log("About to send acceptance email to registrant");
+        brevoResult = await emailService.default.sendWelcomeEmail(
+          registrant.personalEmail,
+          registrant.firstName,
+          schoolEmail,
+          tempPassword
+        );
+        console.log("Acceptance email sent to registrant:", brevoResult.message);
+      } catch (emailErr) {
+        console.error('Error sending acceptance email via Brevo:', emailErr);
+        brevoResult = { success: false, message: 'Failed to send acceptance email' };
+      }
+    } else {
+      brevoResult = { success: false, message: 'No personal email provided, skipping email notification' };
     }
 
     // Try to auto-join the global forum group (by ID if provided, else by name)
@@ -368,8 +375,8 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
     
     await registrant.save();
     
-    // Send rejection email via Brevo (only if email is configured)
-    if (hasEmailConfig) {
+    // Send rejection email via Brevo (only if email is configured and personalEmail is provided)
+    if (hasEmailConfig && registrant.personalEmail) {
       try {
         let defaultClient = SibApiV3Sdk.ApiClient.instance;
         let apiKey = defaultClient.authentications['api-key'];
@@ -390,7 +397,11 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
         console.warn('Rejection completed but email notification failed.');
       }
     } else {
-      console.log('Rejection completed without email notification (email system not configured)');
+      if (!hasEmailConfig) {
+        console.log('Rejection completed without email notification (email system not configured)');
+      } else {
+        console.log('Rejection completed without email notification (no personal email provided)');
+      }
     }
     res.json({ message: 'Registrant rejected.' });
   } catch (err) {
@@ -647,21 +658,25 @@ router.post('/test-approval', async (req, res) => {
     registrant.processedAt = new Date();
     await registrant.save();
     
-    // Send acceptance email via Brevo using EmailService
+    // Send acceptance email via Brevo using EmailService (only if personalEmail is provided)
     let brevoResult = null;
-    try {
-      const emailService = await import('../services/emailService.js');
-      console.log("About to send acceptance email to registrant");
-      brevoResult = await emailService.default.sendWelcomeEmail(
-        registrant.personalEmail,
-        registrant.firstName,
-        schoolEmail,
-        tempPassword
-      );
-      console.log("Acceptance email sent to registrant:", brevoResult.message);
-    } catch (emailErr) {
-      console.error('Error sending acceptance email via Brevo:', emailErr);
-      brevoResult = { success: false, message: 'Failed to send acceptance email' };
+    if (registrant.personalEmail) {
+      try {
+        const emailService = await import('../services/emailService.js');
+        console.log("About to send acceptance email to registrant");
+        brevoResult = await emailService.default.sendWelcomeEmail(
+          registrant.personalEmail,
+          registrant.firstName,
+          schoolEmail,
+          tempPassword
+        );
+        console.log("Acceptance email sent to registrant:", brevoResult.message);
+      } catch (emailErr) {
+        console.error('Error sending acceptance email via Brevo:', emailErr);
+        brevoResult = { success: false, message: 'Failed to send acceptance email' };
+      }
+    } else {
+      brevoResult = { success: false, message: 'No personal email provided, skipping email notification' };
     }
 
     res.json({ 

@@ -1608,29 +1608,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
   // Helper function to clean names for email generation (same as backend)
   const clean = (str) => (str || '').toLowerCase().replace(/[^\p{L}0-9]/gu, '');
 
-  // Auto-generate student email based on first name and last name
-  useEffect(() => {
-    // Generate email if we have both first name and last name
-    if (studentFormData.firstName && studentFormData.lastName) {
-      const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
-      // Always generate email when firstName and lastName are available
-      // This ensures email is always present for new entries
-      setStudentSchoolEmail(prevEmail => {
-        // If no student is selected, always use generated email
-        // If student is selected but email is empty, use generated email
-        if (!studentFormData.studentId || !prevEmail) {
-          return generatedEmail;
-        }
-        // If student is selected and has email, keep it
-        return prevEmail;
-      });
-    } else if (!studentFormData.firstName || !studentFormData.lastName) {
-      // Clear email if first name or last name is missing (only if no student is selected)
-      if (!studentFormData.studentId) {
-        setStudentSchoolEmail('');
-      }
-    }
-  }, [studentFormData.firstName, studentFormData.lastName, studentFormData.studentId]);
+  // Email is no longer auto-generated - user must enter it manually
 
   // Handle selection of a student from suggestions
   const handleSelectStudent = (student) => {
@@ -1647,14 +1625,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     setStudentSearchTerm(`${firstName} ${lastName} (${student.schoolID})`);
     setStudentManualId(student.schoolID); // Also populate the school ID field
     
-    // Populate school email: use student's email if available, otherwise generate one
+    // Populate school email: use student's email if available, otherwise leave empty for manual entry
     const studentEmail = student.email ? (student.getDecryptedEmail ? student.getDecryptedEmail() : student.email) : '';
     if (studentEmail) {
       setStudentSchoolEmail(studentEmail);
     } else {
-      // Generate email if student doesn't have one
-      const generatedEmail = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
-      setStudentSchoolEmail(generatedEmail);
+      // Leave empty for manual entry
+      setStudentSchoolEmail('');
     }
     setShowStudentSuggestions(false);
     setStudentSearchResults([]);
@@ -2287,14 +2264,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       validationErrors.push('Grade Level is required.');
     }
 
-    // Validate email (should be generated if not present)
+    // Validate email (required field, any domain allowed)
     if (!studentSchoolEmail || !studentSchoolEmail.trim()) {
-      if (studentFormData.firstName && studentFormData.lastName) {
-        // Email should be auto-generated, but if it's not, generate it now
-        const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
-        setStudentSchoolEmail(generatedEmail);
-      } else if (!studentFormData.studentId) {
-        validationErrors.push('Email is required. Please ensure first name and last name are provided.');
+      validationErrors.push('Email is required.');
+    } else {
+      // Validate email format (any domain allowed)
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(studentSchoolEmail.trim())) {
+        validationErrors.push('Please enter a valid email address.');
       }
     }
 
@@ -2355,24 +2332,13 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           };
           
           let finalPayload;
-          // Generate email if not already set and we have firstName/lastName
+          // Use email from form field
           let emailToSend = studentSchoolEmail.trim();
-          if (!emailToSend && studentFormData.firstName && studentFormData.lastName) {
-            emailToSend = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
-          }
           
           if (studentToAssign) {
             // If email is still empty, try to get from student object
             if (!emailToSend && studentToAssign.email) {
               emailToSend = studentToAssign.getDecryptedEmail ? studentToAssign.getDecryptedEmail() : studentToAssign.email;
-            }
-            // If still empty, generate from student's name
-            if (!emailToSend) {
-              const firstName = studentToAssign.firstname || studentToAssign.firstName || '';
-              const lastName = studentToAssign.lastname || studentToAssign.lastName || '';
-              if (firstName && lastName) {
-                emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
-              }
             }
             
             finalPayload = { 
@@ -2594,14 +2560,14 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       validationErrors.push('Grade Level is required.');
     }
 
-    // Validate email (should be generated if not present)
+    // Validate email (required field, any domain allowed)
     if (!studentSchoolEmail || !studentSchoolEmail.trim()) {
-      if (studentFormData.firstName && studentFormData.lastName) {
-        // Email should be auto-generated, but if it's not, generate it now
-        const generatedEmail = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
-        setStudentSchoolEmail(generatedEmail);
-      } else if (!studentFormData.studentId) {
-        validationErrors.push('Email is required. Please ensure first name and last name are provided.');
+      validationErrors.push('Email is required.');
+    } else {
+      // Validate email format (any domain allowed)
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(studentSchoolEmail.trim())) {
+        validationErrors.push('Please enter a valid email address.');
       }
     }
 
@@ -2652,11 +2618,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           updatePayload.subjects = selectedSubjects;
         }
 
-        // Generate email if not already set and we have firstName/lastName
+        // Use email from form field
         let emailToSend = studentSchoolEmail.trim();
-        if (!emailToSend && studentFormData.firstName && studentFormData.lastName) {
-          emailToSend = `students.${clean(studentFormData.firstName)}.${clean(studentFormData.lastName)}@sjdefilms.com`;
-        }
         
         // Add student info based on whether it's an existing student or manual entry
         if (studentToAssign) {
@@ -2670,14 +2633,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           // Update school email - try to get from student object if not already set
           if (!emailToSend && studentToAssign.email) {
             emailToSend = studentToAssign.getDecryptedEmail ? studentToAssign.getDecryptedEmail() : studentToAssign.email;
-          }
-          // If still empty, generate from student's name
-          if (!emailToSend) {
-            const firstName = studentToAssign.firstname || studentToAssign.firstName || '';
-            const lastName = studentToAssign.lastname || studentToAssign.lastName || '';
-            if (firstName && lastName) {
-              emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
-            }
           }
           if (emailToSend) {
             updatePayload.studentSchoolEmail = emailToSend;
@@ -5633,11 +5588,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
               enrollmentType: 'Regular'
             };
             
-            // Use email from Excel if provided, otherwise generate email for student
+            // Use email from Excel if provided, otherwise leave empty
             let emailToSend = emailFromExcel.trim();
-            if (!emailToSend && firstName && lastName) {
-              emailToSend = `students.${clean(firstName)}.${clean(lastName)}@sjdefilms.com`;
-            }
             
             if (studentId) {
               // Existing student - send studentId and email if available
@@ -9868,11 +9820,10 @@ Validation issues (${skippedCount} items):
                               type="email"
                               id="studentSchoolEmail"
                               value={studentSchoolEmail}
-                              readOnly
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 cursor-not-allowed"
-                              placeholder="Auto-generated from first name and last name"
+                              onChange={(e) => setStudentSchoolEmail(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter email address (any domain allowed)"
                               disabled={termDetails.status === 'archived'}
-                              title="Email is auto-generated from first name and last name"
                             />
                           </div>
                         </div>

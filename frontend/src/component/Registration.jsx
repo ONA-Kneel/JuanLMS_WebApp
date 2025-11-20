@@ -9,7 +9,6 @@ export default function Registration() {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
-    personalEmail: '',
     schoolEmail: '', // School email for verification (studentSchoolEmail from assignment)
     schoolID: '',
     role: 'students',
@@ -91,7 +90,6 @@ export default function Registration() {
       ...prev,
       schoolID: student.studentSchoolID,
       schoolEmail: student.studentSchoolEmail || student.email || prev.schoolEmail, // Use school email from assignment
-      personalEmail: student.personalEmail || prev.personalEmail, // Preserve existing personal email if student doesn't have one
       firstName: student.firstName,
       lastName: student.lastName,
       trackName: student.trackName,
@@ -137,14 +135,14 @@ export default function Registration() {
       return;
     }
 
-    // Validate school email format (sjdefilms.com domain)
-    const schoolEmailRegex = /^[^\s@]+@sjdefilms\.com$/;
-    if (!schoolEmailRegex.test(trimmedSchoolEmail)) {
+    // Validate email format (any domain allowed)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedSchoolEmail)) {
       setValidationModal({ 
         isOpen: true, 
         type: 'warning', 
-        title: 'Invalid School Email', 
-        message: 'Please enter a valid school email address (e.g., students.firstname.lastname@sjdefilms.com).' 
+        title: 'Invalid Email', 
+        message: 'Please enter a valid email address.' 
       });
       return;
     }
@@ -166,8 +164,7 @@ export default function Registration() {
           lastName: response.data.lastName,
           trackName: response.data.trackName,
           strandName: response.data.strandName,
-          sectionName: response.data.sectionName,
-          personalEmail: response.data.personalEmail || prev.personalEmail // Keep school email or use provided personal email
+          sectionName: response.data.sectionName
         }));
         
         setValidationModal({ 
@@ -250,14 +247,8 @@ export default function Registration() {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Student Number', message: 'Student Number must be in the format YY-00000 (e.g., 25-00001).' });
       setLoading(false); return;
     }
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.personalEmail.trim() || !form.trackName.trim() || !form.strandName.trim() || !form.sectionName.trim()) {
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.trackName.trim() || !form.strandName.trim() || !form.sectionName.trim()) {
       setValidationModal({ isOpen: true, type: 'warning', title: 'Missing Information', message: 'Please fill in all required fields.' });
-      setLoading(false); return;
-    }
-    // Validate email format for SJDEFI domains
-    const emailRegex = /^[^\s@]+@(sjdefi\.edu\.ph|students\.sjdefi\.edu\.ph)$/;
-    if (!emailRegex.test(form.personalEmail)) {
-      setValidationModal({ isOpen: true, type: 'warning', title: 'Invalid Email', message: 'Please enter a valid SJDEFI email address (e.g., username@sjdefi.edu.ph or username@students.sjdefi.edu.ph).' });
       setLoading(false); return;
     }
     if (!form.agreeToPrivacyPolicy) {
@@ -384,20 +375,14 @@ export default function Registration() {
                 type="email" 
                 name="schoolEmail" 
                 required 
-                placeholder="students.firstname.lastname@sjdefilms.com" 
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  form.schoolEmail && !/^[^\s@]+@sjdefilms\.com$/.test(form.schoolEmail.trim())
-                    ? 'border-red-500 focus:ring-red-500' 
-                    : 'border-blue-900'
-                }`}
+                placeholder="Enter your email address" 
+                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900"
                 value={form.schoolEmail} 
                 onChange={handleChange} 
                 disabled={loading || isCheckingStudent || !!studentDetails} 
               />
               <p className="text-xs text-gray-500 mt-1">
-                {form.schoolEmail && !/^[^\s@]+@sjdefilms\.com$/.test(form.schoolEmail.trim())
-                  ? 'Invalid format. Must be @sjdefilms.com'
-                  : 'Enter your school email from your student assignment'}
+                Enter your email address from your student assignment
               </p>
             </div>
             <div className="relative">
@@ -504,23 +489,6 @@ export default function Registration() {
             </div>
           </div>
 
-          {/* Personal Email field - only show when student details are loaded */}
-          {studentDetails && (
-            <div>
-              <label className="block text-base mb-2">Personal Email (SJDEFI)<span className="text-red-500">*</span></label>
-              <input 
-                type="email" 
-                name="personalEmail" 
-                required 
-                placeholder="username@sjdefi.edu.ph" 
-                className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-blue-900" 
-                value={form.personalEmail} 
-                onChange={handleChange} 
-                disabled={loading} 
-              />
-              <p className="text-xs text-gray-500 mt-1">Enter your SJDEFI personal email address for registration</p>
-            </div>
-          )}
 
           {/* Verification button - only show when student details not loaded */}
           {!studentDetails && (() => {
@@ -528,8 +496,8 @@ export default function Registration() {
             const trimmedSchoolID = (form.schoolID || '').trim();
             const trimmedSchoolEmail = (form.schoolEmail || '').trim();
             const isSchoolIDValid = trimmedSchoolID && isValidSchoolId(trimmedSchoolID);
-            const schoolEmailRegex = /^[^\s@]+@sjdefilms\.com$/;
-            const isSchoolEmailValid = trimmedSchoolEmail && schoolEmailRegex.test(trimmedSchoolEmail);
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const isSchoolEmailValid = trimmedSchoolEmail && emailRegex.test(trimmedSchoolEmail);
             const canVerify = isSchoolIDValid && isSchoolEmailValid;
             
             return (
