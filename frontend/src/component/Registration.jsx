@@ -86,12 +86,54 @@ export default function Registration() {
   };
 
   // Function to select a student from dropdown
-  const selectStudent = async (student) => {
+  const selectStudent = (student) => {
+    const enteredSchoolID = (form.schoolID || '').trim();
+    const enteredSchoolEmail = (form.schoolEmail || '').trim().toLowerCase();
+    const studentSchoolID = (student.studentSchoolID || '').trim();
+    const studentEmailRaw = student.studentSchoolEmail || student.email || '';
+    const studentSchoolEmail = studentEmailRaw.trim().toLowerCase();
+
+    const showMismatch = (title, message) => {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title,
+        message,
+      });
+      setStudentDetails(null);
+      setShowStudentDropdown(false);
+      setFilteredStudents([]);
+    };
+
+    if (!enteredSchoolID || !enteredSchoolEmail) {
+      showMismatch(
+        'Enter School ID and Email',
+        'Please type your School ID and School Email before selecting from the list.'
+      );
+      return;
+    }
+
+    if (!studentSchoolID || enteredSchoolID !== studentSchoolID) {
+      showMismatch(
+        'School ID Mismatch',
+        'The Student ID you entered does not match this record. Double-check your Student ID.'
+      );
+      return;
+    }
+
+    if (!studentSchoolEmail || enteredSchoolEmail !== studentSchoolEmail) {
+      showMismatch(
+        'School Email Mismatch',
+        'The School Email you entered does not match this Student ID. Please verify your School Email.'
+      );
+      return;
+    }
+
     setForm(prev => ({
       ...prev,
-      schoolID: student.studentSchoolID,
-      schoolEmail: student.studentSchoolEmail || student.email || prev.schoolEmail, // Use school email from assignment
-      personalEmail: student.studentSchoolEmail || student.email || prev.personalEmail,
+      schoolID: prev.schoolID,
+      schoolEmail: prev.schoolEmail,
+      personalEmail: prev.personalEmail || studentEmailRaw,
       firstName: student.firstName,
       lastName: student.lastName,
       trackName: student.trackName,
@@ -106,7 +148,7 @@ export default function Registration() {
     setValidationModal({ 
       isOpen: true, 
       type: 'success', 
-      title: 'Student Selected', 
+      title: 'Student Verified', 
       message: `Welcome ${student.firstName} ${student.lastName}! Your details have been loaded. Please review and submit your registration.` 
     });
   };
