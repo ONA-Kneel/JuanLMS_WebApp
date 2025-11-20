@@ -15,6 +15,7 @@ export default function Registration() {
     trackName: '',
     strandName: '',
     sectionName: '',
+    personalEmail: '',
     agreeToPrivacyPolicy: false
   });
   const [submitted, setSubmitted] = useState(false);
@@ -90,6 +91,7 @@ export default function Registration() {
       ...prev,
       schoolID: student.studentSchoolID,
       schoolEmail: student.studentSchoolEmail || student.email || prev.schoolEmail, // Use school email from assignment
+      personalEmail: student.studentSchoolEmail || student.email || prev.personalEmail,
       firstName: student.firstName,
       lastName: student.lastName,
       trackName: student.trackName,
@@ -164,7 +166,8 @@ export default function Registration() {
           lastName: response.data.lastName,
           trackName: response.data.trackName,
           strandName: response.data.strandName,
-          sectionName: response.data.sectionName
+          sectionName: response.data.sectionName,
+          personalEmail: trimmedSchoolEmail
         }));
         
         setValidationModal({ 
@@ -224,7 +227,13 @@ export default function Registration() {
     if (name === 'firstName' || name === 'lastName') {
       newValue = value.replace(/[^\p{L}\s'-]/gu, '');
     }
-    setForm(prev => ({ ...prev, [name]: newValue }));
+    setForm(prev => {
+      const updated = { ...prev, [name]: newValue };
+      if (name === 'schoolEmail') {
+        updated.personalEmail = newValue;
+      }
+      return updated;
+    });
     
     // Handle student ID dropdown filtering
     if (name === 'schoolID') {

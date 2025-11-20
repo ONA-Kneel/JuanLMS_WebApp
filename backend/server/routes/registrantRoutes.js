@@ -32,7 +32,6 @@ router.post('/register', async (req, res) => {
     let existingRegistrant = null;
     if (personalEmail) {
       existingRegistrant = await Registrant.findOne({ personalEmail });
-      console.log(`[POST /api/registrants/register] Checking for existing registrant with email ${personalEmail}:`, existingRegistrant ? { exists: true, status: existingRegistrant.status, schoolID: existingRegistrant.schoolID } : { exists: false });
     }
     
     if (existingRegistrant) {
@@ -130,8 +129,6 @@ router.get('/', authenticateToken, async (req, res) => {
         .limit(numericLimit),
       Registrant.countDocuments(filter)
     ]);
-
-    console.log(`[GET /api/registrants] Found ${registrants.length} registrants (total: ${total}) with filter:`, filter);
 
     res.json({
       data: registrants,
@@ -238,16 +235,12 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
       
       // Only create Zoho mailbox if ZOHO_ORG_ID is configured
       if (process.env.ZOHO_ORG_ID) {
-        console.log("Creating Zoho mailbox for registrant:", schoolEmail);
         zohoMailboxResult = await createZohoMailbox(
           schoolEmail.toLowerCase(),
           registrant.firstName,
           registrant.lastName,
           tempPassword
         );
-        console.log("Zoho mailbox created successfully for registrant");
-      } else {
-        console.log("ZOHO_ORG_ID not configured, skipping Zoho mailbox creation");
       }
     } catch (zohoErr) {
       console.error('Error creating Zoho mailbox for registrant:', zohoErr.message);
@@ -265,19 +258,20 @@ router.post('/:id/approve', authenticateToken, async (req, res) => {
     if (registrant.personalEmail) {
       try {
         const emailService = await import('../services/emailService.js');
-        console.log("About to send acceptance email to registrant");
+        console.log("About to send acceptance email to registrant:", registrant.personalEmail);
         brevoResult = await emailService.default.sendWelcomeEmail(
           registrant.personalEmail,
           registrant.firstName,
           schoolEmail,
           tempPassword
         );
-        console.log("Acceptance email sent to registrant:", brevoResult.message);
+        console.log("Acceptance email sent to registrant:", brevoResult?.message || brevoResult);
       } catch (emailErr) {
         console.error('Error sending acceptance email via Brevo:', emailErr);
         brevoResult = { success: false, message: 'Failed to send acceptance email' };
       }
     } else {
+      console.log('Acceptance email not sent: registrant has no personal email on file');
       brevoResult = { success: false, message: 'No personal email provided, skipping email notification' };
     }
 
@@ -383,6 +377,7 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
         apiKey.apiKey = process.env.BREVO_API_KEY;
         let apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
         let applicantName = `${registrant.firstName} ${registrant.lastName}`;
+        console.log('About to send rejection email to', registrant.personalEmail);
         let sendSmtpEmail = {
           to: [{ email: registrant.personalEmail, name: applicantName }],
           sender: { email: 'juanlms.sjddefi@gmail.com', name: 'JuanLMS Support' },
@@ -396,12 +391,10 @@ router.post('/:id/reject', authenticateToken, async (req, res) => {
         console.error('Error sending rejection email via Brevo:', emailErr);
         console.warn('Rejection completed but email notification failed.');
       }
+    } else if (!hasEmailConfig) {
+      console.log('Rejection email not sent: BREVO_API_KEY missing');
     } else {
-      if (!hasEmailConfig) {
-        console.log('Rejection completed without email notification (email system not configured)');
-      } else {
-        console.log('Rejection completed without email notification (no personal email provided)');
-      }
+      console.log('Rejection email not sent: registrant has no personal email on file');
     }
     res.json({ message: 'Registrant rejected.' });
   } catch (err) {
@@ -637,16 +630,12 @@ router.post('/test-approval', async (req, res) => {
       
       // Only create Zoho mailbox if ZOHO_ORG_ID is configured
       if (process.env.ZOHO_ORG_ID) {
-        console.log("Creating Zoho mailbox for registrant:", schoolEmail);
         zohoMailboxResult = await createZohoMailbox(
           schoolEmail.toLowerCase(),
           registrant.firstName,
           registrant.lastName,
           tempPassword
         );
-        console.log("Zoho mailbox created successfully for registrant");
-      } else {
-        console.log("ZOHO_ORG_ID not configured, skipping Zoho mailbox creation");
       }
     } catch (zohoErr) {
       console.error('Error creating Zoho mailbox for registrant:', zohoErr.message);
@@ -735,13 +724,6 @@ router.get('/tracks', async (req, res) => {
       termName: activeTerm.termName
     });
     
-    console.log('Fetched tracks for registration:', {
-      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
-      termName: activeTerm.termName,
-      tracksCount: tracks.length,
-      tracks: tracks.map(t => ({ _id: t._id, trackName: t.trackName, schoolYear: t.schoolYear, termName: t.termName }))
-    });
-    
     res.json(tracks);
   } catch (error) {
     console.error('Error fetching tracks:', error);
@@ -774,13 +756,6 @@ router.get('/strands', async (req, res) => {
     const strands = await Strand.find({
       schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
       termName: activeTerm.termName
-    });
-    
-    console.log('Fetched strands for registration:', {
-      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
-      termName: activeTerm.termName,
-      strandsCount: strands.length,
-      strands: strands.map(s => ({ _id: s._id, strandName: s.strandName, trackName: s.trackName, schoolYear: s.schoolYear, termName: s.termName }))
     });
     
     res.json(strands);
@@ -817,13 +792,6 @@ router.get('/sections', async (req, res) => {
       termName: activeTerm.termName
     });
     
-    console.log('Fetched sections for registration:', {
-      schoolYear: `${activeYear.schoolYearStart}-${activeYear.schoolYearEnd}`,
-      termName: activeTerm.termName,
-      sectionsCount: sections.length,
-      sections: sections.map(s => ({ _id: s._id, sectionName: s.sectionName, trackName: s.trackName, strandName: s.strandName, schoolYear: s.schoolYear, termName: s.termName }))
-    });
-    
     res.json(sections);
   } catch (error) {
     console.error('Error fetching sections:', error);
@@ -841,8 +809,6 @@ router.get('/student-options', async (req, res) => {
     const studentAssignments = await StudentAssignment.find({
       status: 'active'
     }).select('studentSchoolID studentSchoolEmail studentName firstName lastName trackName strandName sectionName personalEmail');
-    
-    console.log('Raw student assignments from DB:', studentAssignments.length);
     
     // Transform data for dropdown and filter out invalid entries
     const studentOptions = studentAssignments
@@ -862,7 +828,6 @@ router.get('/student-options', async (req, res) => {
         personalEmail: assignment.personalEmail || ''
       }));
     
-    console.log('Processed student options:', studentOptions.length);
     res.json(studentOptions);
   } catch (error) {
     console.error('Error fetching student options:', error);
@@ -905,14 +870,12 @@ router.post('/student-details', async (req, res) => {
     // Double-check: verify the email matches exactly (case-insensitive)
     const assignmentEmail = (studentAssignment.studentSchoolEmail || '').trim().toLowerCase();
     if (assignmentEmail !== normalizedSchoolEmail) {
-      console.log(`Email mismatch: provided="${normalizedSchoolEmail}", found="${assignmentEmail}"`);
       return res.status(404).json({ message: 'Student not found. Please verify that your School ID and School Email match the records in our system.' });
     }
     
     // Verify school ID matches
     const assignmentSchoolID = (studentAssignment.studentSchoolID || '').trim();
     if (assignmentSchoolID !== normalizedSchoolID) {
-      console.log(`School ID mismatch: provided="${normalizedSchoolID}", found="${assignmentSchoolID}"`);
       return res.status(404).json({ message: 'Student not found. Please verify that your School ID and School Email match the records in our system.' });
     }
     

@@ -1854,9 +1854,9 @@ userRoutes.post('/forgot-password', async (req, res) => {
 userRoutes.get('/test-email', async (req, res) => {
     try {
         const apiKeyVal = process.env.BREVO_API_KEY || '';
-        const maskedKey = apiKeyVal.length > 8 ? apiKeyVal.slice(0, 4) + '...' + apiKeyVal.slice(-4) : apiKeyVal;
-        console.log('BREVO_API_KEY (masked):', maskedKey);
-        console.log('About to send Brevo test email');
+        const maskedKey = apiKeyVal.length > 8 ? apiKeyVal.slice(0, 6) + '...' + apiKeyVal.slice(-4) : apiKeyVal;
+        console.log('[BREVO TEST] Using API key:', maskedKey || '(not set)');
+        console.log('[BREVO TEST] About to send Brevo test email');
         let defaultClient = SibApiV3Sdk.ApiClient.instance;
         let apiKey = defaultClient.authentications['api-key'];
         apiKey.apiKey = process.env.BREVO_API_KEY;

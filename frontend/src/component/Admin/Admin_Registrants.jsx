@@ -60,18 +60,51 @@ export default function Admin_Registrants() {
   // Check if any search field has input
   const isSearching = searchTerms.schoolID || searchTerms.firstName || searchTerms.middleName || searchTerms.lastName || searchTerms.personalEmail || searchTerms.track || searchTerms.strand || searchTerms.section;
   
+  const normalizeSearchValue = (value) => {
+    if (value === null || value === undefined) return '';
+    try {
+      return String(value).trim().toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  };
+
   // Client-side filtering for search
   const displayedRegistrants = registrants.filter(registrant => {
-    // Only apply filters if search terms are not empty
-    const matchesSchoolID = !searchTerms.schoolID || registrant.schoolID?.toLowerCase().includes(searchTerms.schoolID.toLowerCase());
-    const matchesFirstName = !searchTerms.firstName || registrant.firstName?.toLowerCase().includes(searchTerms.firstName.toLowerCase());
-    const matchesMiddleName = !searchTerms.middleName || registrant.middleName?.toLowerCase().includes(searchTerms.middleName.toLowerCase());
-    const matchesLastName = !searchTerms.lastName || registrant.lastName?.toLowerCase().includes(searchTerms.lastName.toLowerCase());
-    const matchesPersonalEmail = !searchTerms.personalEmail || registrant.personalEmail?.toLowerCase().includes(searchTerms.personalEmail.toLowerCase());
-    const matchesTrack = !searchTerms.track || registrant.trackName?.toLowerCase().includes(searchTerms.track.toLowerCase());
-    const matchesStrand = !searchTerms.strand || registrant.strandName?.toLowerCase().includes(searchTerms.strand.toLowerCase());
-    const matchesSection = !searchTerms.section || registrant.sectionName?.toLowerCase().includes(searchTerms.section.toLowerCase());
-    const matchesStatus = searchTerms.status === "all" || !searchTerms.status || registrant.status === searchTerms.status;
+    const normalizedRegistrant = {
+      schoolID: normalizeSearchValue(registrant.schoolID),
+      firstName: normalizeSearchValue(registrant.firstName),
+      middleName: normalizeSearchValue(registrant.middleName),
+      lastName: normalizeSearchValue(registrant.lastName),
+      personalEmail: normalizeSearchValue(registrant.personalEmail),
+      trackName: normalizeSearchValue(registrant.trackName),
+      strandName: normalizeSearchValue(registrant.strandName),
+      sectionName: normalizeSearchValue(registrant.sectionName),
+      status: normalizeSearchValue(registrant.status)
+    };
+
+    const normalizedSearch = {
+      schoolID: normalizeSearchValue(searchTerms.schoolID),
+      firstName: normalizeSearchValue(searchTerms.firstName),
+      middleName: normalizeSearchValue(searchTerms.middleName),
+      lastName: normalizeSearchValue(searchTerms.lastName),
+      personalEmail: normalizeSearchValue(searchTerms.personalEmail),
+      track: normalizeSearchValue(searchTerms.track),
+      strand: normalizeSearchValue(searchTerms.strand),
+      section: normalizeSearchValue(searchTerms.section),
+      status: normalizeSearchValue(searchTerms.status)
+    };
+
+    const matchesSchoolID = !normalizedSearch.schoolID || normalizedRegistrant.schoolID.includes(normalizedSearch.schoolID);
+    const matchesFirstName = !normalizedSearch.firstName || normalizedRegistrant.firstName.includes(normalizedSearch.firstName);
+    const matchesMiddleName = !normalizedSearch.middleName || normalizedRegistrant.middleName.includes(normalizedSearch.middleName);
+    const matchesLastName = !normalizedSearch.lastName || normalizedRegistrant.lastName.includes(normalizedSearch.lastName);
+    const matchesPersonalEmail = !normalizedSearch.personalEmail || normalizedRegistrant.personalEmail.includes(normalizedSearch.personalEmail);
+    const matchesTrack = !normalizedSearch.track || normalizedRegistrant.trackName.includes(normalizedSearch.track);
+    const matchesStrand = !normalizedSearch.strand || normalizedRegistrant.strandName.includes(normalizedSearch.strand);
+    const matchesSection = !normalizedSearch.section || normalizedRegistrant.sectionName.includes(normalizedSearch.section);
+    const matchesStatus = normalizedSearch.status === '' || normalizedSearch.status === 'all' || normalizedRegistrant.status === normalizedSearch.status;
+
     return matchesSchoolID && matchesFirstName && matchesMiddleName && matchesLastName && matchesPersonalEmail && matchesTrack && matchesStrand && matchesSection && matchesStatus;
   });
 
@@ -102,11 +135,8 @@ export default function Admin_Registrants() {
       if (selectedDate) params.date = selectedDate;
       if (statusFilter !== 'all') params.status = statusFilter;
       
-      console.log('Fetching registrants with params:', params);
       const token = localStorage.getItem("token");
       const res = await axios.get(`${API_BASE}/api/registrants`, { params, headers: { Authorization: `Bearer ${token}` } });
-      console.log('Fetched registrants:', res.data?.data?.length || 0, 'registrants');
-      console.log('Registrants data:', res.data?.data);
       setRegistrants(res.data?.data || []);
       if (res.data?.pagination && !isCurrentlySearching) {
         setPagination(res.data.pagination);
@@ -198,12 +228,9 @@ export default function Admin_Registrants() {
         });
         if (res.ok) {
           const terms = await res.json();
-          console.log('Available terms:', terms);
-          const active = terms.find(term => term.status === 'active');
-          console.log('Active term found:', active);
+        const active = terms.find(term => term.status === 'active');
           setCurrentTerm(active || null);
         } else {
-          console.log('Failed to fetch terms, status:', res.status);
           setCurrentTerm(null);
         }
       } catch {
@@ -228,12 +255,10 @@ export default function Admin_Registrants() {
     const performRefresh = async () => {
       // Prevent multiple simultaneous refreshes
       if (isRefreshing) {
-        console.log('Refresh already in progress, skipping...');
         return;
       }
       
       isRefreshing = true;
-      console.log('=== PERFORMING REFRESH FOR NEW REGISTRANT ===');
       
       try {
         // Clear all filters first
@@ -259,18 +284,10 @@ export default function Admin_Registrants() {
         // Force immediate refresh with fresh API call
         setLoading(true);
         const token = localStorage.getItem("token");
-        console.log('Fetching registrants with fresh API call...');
         const res = await axios.get(`${API_BASE}/api/registrants`, { 
           params: { page: 1, limit: 10, status: 'all' },
           headers: { Authorization: `Bearer ${token}` } 
         });
-        
-        console.log('=== REFRESH RESULTS ===');
-        console.log('Fetched registrants:', res.data?.data?.length || 0, 'registrants');
-        console.log('First registrant ID:', res.data?.data?.[0]?._id);
-        console.log('First registrant name:', res.data?.data?.[0]?.firstName, res.data?.data?.[0]?.lastName);
-        console.log('All registrant IDs:', res.data?.data?.map(r => r._id));
-        console.log('All registrant statuses:', res.data?.data?.map(r => r.status));
         
         // Force update registrants state
         const fetchedRegistrants = res.data?.data || [];
@@ -292,18 +309,13 @@ export default function Admin_Registrants() {
         // Update the ref for polling
         if (fetchedRegistrants.length > 0) {
           lastFirstRegistrantIdRef.current = fetchedRegistrants[0]._id;
-          console.log('Updated lastFirstRegistrantIdRef to:', lastFirstRegistrantIdRef.current);
         }
-        
-        // Force a re-render by logging the state
-        console.log('State updated - registrants count:', fetchedRegistrants.length);
       } catch (err) {
         console.error('Refresh error:', err);
         setError('Failed to refresh registrants');
       } finally {
         setLoading(false);
         isRefreshing = false;
-        console.log('=== REFRESH COMPLETE ===');
       }
     };
     
@@ -312,7 +324,6 @@ export default function Admin_Registrants() {
     
     const handleStorageChange = (e) => {
       if (e.key === 'newRegistrantCreated' || e.key === 'registrantUpdated') {
-        console.log('=== STORAGE EVENT DETECTED ===', e.key);
         performRefresh();
       }
     };
@@ -321,8 +332,7 @@ export default function Admin_Registrants() {
     window.addEventListener('storage', handleStorageChange);
     
     // Also listen for custom events (from same window)
-    const handleCustomEvent = (e) => {
-      console.log('=== CUSTOM EVENT DETECTED ===', e.type);
+    const handleCustomEvent = () => {
       performRefresh();
     };
     window.addEventListener('registrantCreated', handleCustomEvent);
@@ -335,7 +345,6 @@ export default function Admin_Registrants() {
         const now = Date.now();
         // Only refresh if the event happened in the last 15 seconds and we haven't checked this timestamp yet
         if (now - lastCreatedTime < 15000 && lastCreatedTime > lastCheckedTime) {
-          console.log('=== LOCALSTORAGE CHANGE DETECTED ===', 'Time diff:', now - lastCreatedTime, 'ms');
           lastCheckedTime = lastCreatedTime;
           performRefresh();
         }
@@ -382,9 +391,6 @@ export default function Admin_Registrants() {
           // Always update if first registrant changed (new one appeared at top) or if list is empty
           if (firstRegistrantId !== lastFirstRegistrantIdRef.current || registrants.length === 0) {
             if (firstRegistrantId !== lastFirstRegistrantIdRef.current && lastFirstRegistrantIdRef.current !== null) {
-              console.log(`=== POLLING: NEW REGISTRANT DETECTED ===`);
-              console.log(`First ID changed: ${lastFirstRegistrantIdRef.current} -> ${firstRegistrantId}`);
-              console.log('New registrant:', newRegistrants[0]);
               // Also trigger the refresh function to ensure everything is updated
               if (refreshRegistrantsRef.current) {
                 refreshRegistrantsRef.current();
@@ -425,19 +431,14 @@ export default function Admin_Registrants() {
   useEffect(() => {
     async function fetchStudentAssignments() {
       if (!currentTerm) {
-        console.log('No current term available for fetching student assignments');
         return;
       }
       try {
-        console.log('Fetching student assignments for term:', currentTerm);
-        console.log('Term ID:', currentTerm._id);
         const token = localStorage.getItem("token");
         const res = await axios.get(`${API_BASE}/api/student-assignments`, {
           params: { termId: currentTerm._id },
           headers: { Authorization: `Bearer ${token}` }
         });
-        console.log('Student assignments response status:', res.status);
-        console.log('Fetched student assignments:', res.data);
         setStudentAssignments(res.data || []);
       } catch (err) {
         // Silent fail; validation column will show unknown
@@ -457,10 +458,8 @@ export default function Admin_Registrants() {
         const res = await axios.get(`${API_BASE}/users/active`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        console.log('Fetched users:', res.data);
         // Filter to only get students
         const studentUsers = (res.data || []).filter(user => user.role === 'students');
-        console.log('Filtered students:', studentUsers);
         setStudents(studentUsers);
       } catch (err) {
         console.warn('Failed to fetch students for validation:', err);
@@ -481,17 +480,6 @@ export default function Admin_Registrants() {
     const registrantName = normalizeName(r.firstName, r.middleName, r.lastName);
     const registrantSchoolId = (r.schoolID || '').trim();
     
-    console.log('=== VALIDATION DEBUG ===');
-    console.log('Registrant:', {
-      name: registrantName,
-      schoolId: registrantSchoolId,
-      firstName: r.firstName,
-      middleName: r.middleName,
-      lastName: r.lastName
-    });
-    console.log('Available student assignments:', studentAssignments.length);
-    console.log('Student assignments data:', studentAssignments);
-    
     // Try multiple matching strategies
     const matched = studentAssignments.find(a => {
       // Get all possible school ID fields
@@ -502,7 +490,6 @@ export default function Admin_Registrants() {
         const linkedStudent = students.find(s => s._id === a.studentId);
         if (linkedStudent) {
           assignmentSchoolId = (linkedStudent.schoolID || '').trim();
-          console.log('Found school ID from linked student:', assignmentSchoolId);
         }
       }
       
@@ -512,22 +499,10 @@ export default function Admin_Registrants() {
       const assignmentLastName = (a.lastname || a.lastName || '').trim().toLowerCase();
       const assignmentNormalizedName = normalizeName(assignmentFirstName, '', assignmentLastName);
       
-      console.log('Checking assignment:', {
-        assignmentFullName,
-        assignmentFirstName,
-        assignmentLastName,
-        assignmentNormalizedName,
-        assignmentSchoolId,
-        registrantName,
-        registrantSchoolId,
-        fullAssignmentObject: a
-      });
-      
       // Check school ID match first
       const schoolIdMatch = assignmentSchoolId === registrantSchoolId;
       
       if (!schoolIdMatch) {
-        console.log('School ID does not match');
         return false;
       }
       
@@ -537,12 +512,8 @@ export default function Admin_Registrants() {
                        (assignmentFirstName === r.firstName?.toLowerCase() && 
                         assignmentLastName === r.lastName?.toLowerCase());
       
-      console.log('Match results:', { schoolIdMatch, nameMatch });
-      
       return nameMatch;
     });
-    
-    console.log('Primary match result:', matched);
     
     // If no exact match found, try to find by school ID only (fallback)
     if (!matched) {
@@ -557,15 +528,11 @@ export default function Admin_Registrants() {
           }
         }
         
-        console.log('Fallback check - assignment school ID:', assignmentSchoolId, 'vs registrant:', registrantSchoolId);
         return assignmentSchoolId === registrantSchoolId;
       });
-      console.log('Fallback match result:', schoolIdMatch);
       return !!schoolIdMatch;
     }
     
-    console.log('Final result:', !!matched);
-    console.log('=== END VALIDATION DEBUG ===');
     return !!matched;
   };
 
@@ -799,7 +766,6 @@ export default function Admin_Registrants() {
               <button 
                 className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition" 
                 onClick={async () => {
-                  console.log('Manual refresh button clicked');
                   // Reset to first page and refresh
                   setSearchTerms({
                     schoolID: "",
@@ -825,7 +791,6 @@ export default function Admin_Registrants() {
                       params: { page: 1, limit: 10, status: 'all' },
                       headers: { Authorization: `Bearer ${token}` } 
                     });
-                    console.log('Manual refresh - Fetched registrants:', res.data?.data?.length || 0);
                     setRegistrants(res.data?.data || []);
                     if (res.data?.pagination) {
                       setPagination(res.data.pagination);
