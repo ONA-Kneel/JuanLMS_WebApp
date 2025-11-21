@@ -5268,7 +5268,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       const enrollmentNoInput = assignment['enrollment_no']?.trim() || '';
       const enrollmentDateInput = assignment['date']?.trim() || '';
       const gradeLevel = assignment['grade']?.trim() || assignment['Grade Level']?.trim() || '';
-      const trackName = assignment['Track Name']?.trim() || assignment['track']?.trim() || ''; // Track name may come from either header
+      const trackName = assignment['Track Name']?.trim() || ''; // Track name not in new format, will be derived from strand
       const strandName = assignment['strand']?.trim() || assignment['Strand Name']?.trim() || '';
       const sectionName = assignment['section']?.trim() || assignment['Section Name']?.trim() || '';
       // Derive track name from strand if not provided (for new San Juan format)
@@ -5420,7 +5420,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Find the actual header row
-      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'];
+      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'strand', 'section', 'grade'];
       const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
       
       // Get data rows starting after the header row
@@ -5450,7 +5450,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       // Optional headers
       const optionalHeadersMap = {
         'student_school_email': '',
-        'Track Name': '',
       };
       const headerMapping = {};
 
@@ -5500,12 +5499,6 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           } else {
             obj[expectedKey] = ''; // Assign empty string if data is missing for a required column
           }
-        }
-        // Maintain compatibility between "track" and "Track Name" usages
-        if (obj['track'] && !obj['Track Name']) {
-          obj['Track Name'] = obj['track'];
-        } else if (obj['Track Name'] && !obj['track']) {
-          obj['track'] = obj['Track Name'];
         }
         return obj;
       });
@@ -5587,7 +5580,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           body: JSON.stringify((() => {
             const basePayload = {
               gradeLevel: assignment['grade'] || assignment['Grade Level'],
-              trackName: assignment['Track Name'] || assignment['track'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
+              trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
@@ -10085,7 +10078,6 @@ Validation issues (${skippedCount} items):
                             <tr className="bg-gray-100 text-left">
                               <th className="p-3 border">Student School ID</th>
                               <th className="p-3 border">Student Name</th>
-                              <th className="p-3 border">Student Email</th>
                               <th className="p-3 border">Grade Level</th>
                               <th className="p-3 border">Track Name</th>
                               <th className="p-3 border">Strand Name</th>
@@ -10104,40 +10096,15 @@ Validation issues (${skippedCount} items):
                               const firstName = assignment['first_name'] || '';
                               const lastName = assignment['last_name'] || '';
                               const studentName = `${firstName} ${lastName}`.trim();
-                              const studentEmail = assignment['student_school_email'] || assignment['Student School Email'] || '';
                               const gradeLevel = assignment['grade'] || assignment['Grade Level'] || '';
-                              const rawTrackName = assignment['Track Name'] || assignment['track'] || '';
+                              const trackName = assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track');
                               const strandName = assignment['strand'] || assignment['Strand Name'] || '';
                               const sectionName = assignment['section'] || assignment['Section Name'] || '';
-                              let trackName = rawTrackName;
-                              if (!trackName && strandName) {
-                                if (
-                                  strandName === 'STEM' ||
-                                  strandName === 'ABM' ||
-                                  strandName === 'GAS' ||
-                                  strandName === 'HUMSS' ||
-                                  strandName === 'Accountancy, Business and Management (ABM)' ||
-                                  strandName === 'General Academic Strand (GAS)' ||
-                                  strandName === 'Humanities and Social Sciences (HUMSS)' ||
-                                  strandName === 'Science, Technology, Engineering, and Mathematics (STEM)'
-                                ) {
-                                  trackName = 'Academic Track';
-                                } else if (
-                                  strandName === 'Housekeeping' ||
-                                  strandName === 'Cookery' ||
-                                  strandName === 'Food and Beverage Services' ||
-                                  strandName === 'Bread and Pastry Production' ||
-                                  strandName === 'ICT'
-                                ) {
-                                  trackName = 'TVL Track';
-                                }
-                              }
                               
                               return (
                                 <tr key={index} className={!isValid ? 'bg-red-50' : ''}>
                                   <td className="p-3 border">{studentSchoolID}</td>
                                   <td className="p-3 border">{studentName}</td>
-                                  <td className="p-3 border break-words max-w-[180px]">{studentEmail || '—'}</td>
                                   <td className="p-3 border">{gradeLevel}</td>
                                   <td className="p-3 border">{trackName}</td>
                                   <td className="p-3 border">{strandName}</td>

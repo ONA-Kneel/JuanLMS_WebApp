@@ -543,6 +543,7 @@ export default function Admin_Registrants() {
     try {
       const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/api/registrants/${id}/approve`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      console.log('[Registrants] Approval succeeded. Backend will send acceptance email if configured.');
       setRegistrants(registrants => registrants.map(r => r._id === id ? { ...r, status: 'approved', rejectionNote: '' } : r));
     } catch (err) {
       console.error('Error approving registrant:', err);
@@ -589,6 +590,7 @@ export default function Admin_Registrants() {
     try {
       const token = localStorage.getItem("token");
       await axios.post(`${API_BASE}/api/registrants/${rejectingId}/reject`, { note: rejectionNote }, { headers: { Authorization: `Bearer ${token}` } });
+      console.log('[Registrants] Rejection succeeded. Backend will send rejection email if configured.');
       setRegistrants(registrants => registrants.map(r => r._id === rejectingId ? { ...r, status: 'rejected', rejectionNote } : r));
       setShowRejectModal(false);
       setRejectingId(null);
