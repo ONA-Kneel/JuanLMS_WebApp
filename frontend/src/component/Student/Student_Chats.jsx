@@ -754,6 +754,9 @@ export default function Student_Chats() {
           senderFirstname: storedUser ? JSON.parse(storedUser).firstname : "Unknown",
           senderLastname: storedUser ? JSON.parse(storedUser).lastname : "User",
           senderProfilePic: storedUser ? JSON.parse(storedUser).profilePic : null,
+          threadId: sentMessage.threadId || null,
+          parentMessageId: sentMessage.parentMessageId || null,
+          title: sentMessage.title || null,
         });
 
         setGroupMessages((prev) => ({

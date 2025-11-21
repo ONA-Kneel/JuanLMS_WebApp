@@ -11,6 +11,7 @@ import net from 'node:net';
 import messageRoutes from "./routes/messages.js";
 import groupChatRoutes from "./routes/groupChats.js";
 import groupMessageRoutes from "./routes/groupMessages.js";
+import forumPostRoutes from "./routes/forumPosts.js";
 import multer from "multer";
 import fs from "fs";
 import mongoose from "mongoose";
@@ -422,18 +423,22 @@ io.on("connection", (socket) => {
     });
 
     // Send message to group chat
-    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic }) => {
-        console.log("Received sendGroupMessage:", { senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic });
+    socket.on("sendGroupMessage", ({ senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic, threadId, parentMessageId, title, fileName }) => {
+        console.log("Received sendGroupMessage:", { senderId, groupId, text, fileUrl, senderName, senderFirstname, senderLastname, senderProfilePic, threadId, parentMessageId, title, fileName });
 
         const payload = {
             senderId,
             groupId,
             text,
             fileUrl,
+            fileName,
             senderName,
             senderFirstname,
             senderLastname,
             senderProfilePic,
+            threadId,
+            parentMessageId,
+            title,
             createdAt: new Date().toISOString(),
             timestamp: new Date().toISOString()
         };
@@ -687,6 +692,7 @@ app.use('/', zohoRoutes);
 app.use('/messages', messageRoutes);
 app.use('/group-chats', groupChatRoutes);
 app.use('/group-messages', groupMessageRoutes);
+app.use('/forum-posts', forumPostRoutes);
 
 // Static file serving
 app.use('/uploads', express.static('uploads'));

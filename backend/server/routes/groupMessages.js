@@ -51,7 +51,7 @@ const upload = await initializeGroupMessageStorage();
 // --- POST / - Send a message to a group chat ---
 router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
   try {
-    const { groupId, senderId, message } = req.body;
+    const { groupId, senderId, message, parentMessageId, title } = req.body;
     const fileUrl = req.file ? (req.file.secure_url || req.file.path || `uploads/messages/${req.file.filename}`) : null;
 
     if (!groupId || !senderId) {
@@ -68,24 +68,137 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
       return res.status(403).json({ error: "You are not a participant in this group" });
     }
 
+    // Normalize parentMessageId - handle string, empty string, null, undefined
+    const normalizedParentId = parentMessageId && String(parentMessageId).trim() 
+      ? String(parentMessageId).trim() 
+      : null;
+    
+    // Debug logging
+    console.log('[POST /group-messages] Received:', {
+      groupId,
+      senderId,
+      hasMessage: !!message,
+      hasFile: !!fileUrl,
+      rawParentMessageId: parentMessageId,
+      normalizedParentId: normalizedParentId,
+      parentMessageIdType: typeof parentMessageId,
+      title: title
+    });
+    
+    let resolvedThreadId = null;
+    if (normalizedParentId) {
+      const parentMessage = await GroupMessage.findById(normalizedParentId);
+      if (!parentMessage) {
+        console.error('[POST /group-messages] Parent message not found:', normalizedParentId);
+        return res.status(404).json({ error: "Parent message not found" });
+      }
+      const parentGroupId = parentMessage.getDecryptedGroupId();
+      if (parentGroupId !== groupId) {
+        return res.status(400).json({ error: "Parent message does not belong to this group" });
+      }
+      // For replies, always use parent's threadId (or parent's _id if parent is root)
+      resolvedThreadId = (parentMessage.threadId && String(parentMessage.threadId).trim()) 
+        ? String(parentMessage.threadId).trim() 
+        : String(parentMessage._id);
+      console.log('[POST /group-messages] Reply detected:', {
+        normalizedParentId,
+        resolvedThreadId,
+        parentThreadId: parentMessage.threadId
+      });
+    }
+
     const newMessage = new GroupMessage({
       groupId,
       senderId,
       message,
       fileUrl,
+      parentMessageId: normalizedParentId,
+      threadId: resolvedThreadId, // For replies, this should be set; for new posts, it's null
+      title: title?.trim() ? title.trim() : null,
     });
 
+    // Explicitly mark parentMessageId as modified to ensure it's saved even if null
+    if (normalizedParentId !== undefined) {
+      newMessage.markModified('parentMessageId');
+    }
+    
     await newMessage.save();
+    
+    // Reload from database to verify what was actually saved
+    const savedMessage = await GroupMessage.findById(newMessage._id);
+    
+    console.log('[POST /group-messages] Saved message:', {
+      _id: String(savedMessage._id),
+      parentMessageId: savedMessage.parentMessageId,
+      parentMessageIdType: typeof savedMessage.parentMessageId,
+      threadId: savedMessage.threadId,
+      hasParent: !!savedMessage.parentMessageId,
+      normalizedParentId: normalizedParentId
+    });
+
+    // For new posts (no parentMessageId), set threadId to the message's own _id
+    if (!normalizedParentId) {
+      if (!savedMessage.threadId) {
+        savedMessage.threadId = String(savedMessage._id);
+        await savedMessage.save();
+      }
+    } else {
+      // For replies, ensure threadId and parentMessageId are set correctly
+      if (!savedMessage.threadId || String(savedMessage.threadId).trim() === '') {
+        // Re-fetch parent to get its threadId as fallback
+        const parentMsg = await GroupMessage.findById(normalizedParentId);
+        if (parentMsg) {
+          const parentThreadId = (parentMsg.threadId && String(parentMsg.threadId).trim())
+            ? String(parentMsg.threadId).trim()
+            : String(parentMsg._id);
+          savedMessage.threadId = parentThreadId;
+          await savedMessage.save();
+        }
+      }
+      
+      // Double-check parentMessageId was saved - CRITICAL FIX
+      if (!savedMessage.parentMessageId && normalizedParentId) {
+        console.error('[POST /group-messages] WARNING: parentMessageId was not saved! Forcing update...', {
+          messageId: String(savedMessage._id),
+          expectedParentId: normalizedParentId
+        });
+        // Force update parentMessageId using updateOne to bypass any hooks
+        await GroupMessage.updateOne(
+          { _id: savedMessage._id },
+          { $set: { parentMessageId: normalizedParentId } }
+        );
+      }
+    }
+
+    // Reload one more time to get the absolute latest values
+    const finalMessage = await GroupMessage.findById(savedMessage._id);
+    const finalThreadId = finalMessage.threadId 
+      ? String(finalMessage.threadId) 
+      : (normalizedParentId ? null : String(finalMessage._id)); // For replies, don't fallback to _id
+
+    const finalParentId = finalMessage.parentMessageId 
+      ? String(finalMessage.parentMessageId) 
+      : null;
+
+    console.log('[POST /group-messages] Final message before response:', {
+      _id: String(finalMessage._id),
+      parentMessageId: finalParentId,
+      threadId: finalThreadId,
+      title: finalMessage.getDecryptedTitle()
+    });
 
     // Return decrypted message to frontend
     res.status(201).json({
-      _id: newMessage._id,
-      groupId: newMessage.getDecryptedGroupId(),
-      senderId: newMessage.getDecryptedSenderId(),
-      message: newMessage.getDecryptedMessage(),
-      fileUrl: newMessage.getDecryptedFileUrl(),
-      createdAt: newMessage.createdAt,
-      updatedAt: newMessage.updatedAt,
+      _id: finalMessage._id,
+      groupId: finalMessage.getDecryptedGroupId(),
+      senderId: finalMessage.getDecryptedSenderId(),
+      message: finalMessage.getDecryptedMessage(),
+      fileUrl: finalMessage.getDecryptedFileUrl(),
+      parentMessageId: finalParentId,
+      threadId: finalThreadId || String(finalMessage._id), // Final fallback only for root posts
+      title: finalMessage.getDecryptedTitle(),
+      createdAt: finalMessage.createdAt,
+      updatedAt: finalMessage.updatedAt,
     });
   } catch (err) {
     console.error("Error sending group message:", err);
@@ -117,18 +230,91 @@ router.get('/:groupId', authenticateToken, async (req, res) => {
     // This is a limitation of the current encryption approach
     const messages = await GroupMessage.find({});
     
-    // Decrypt all fields and filter by groupId
+    // First pass: decrypt and filter by groupId
     const decryptedMessages = messages
-      .map(msg => ({
-        _id: msg._id,
-        groupId: msg.getDecryptedGroupId(),
-        senderId: msg.getDecryptedSenderId(),
-        message: msg.getDecryptedMessage(),
-        fileUrl: msg.getDecryptedFileUrl(),
-        createdAt: msg.createdAt,
-        updatedAt: msg.updatedAt,
-      }))
+      .map(msg => {
+        // Debug: Log raw parentMessageId from database
+        const rawParentId = msg.parentMessageId;
+        const rawThreadId = msg.threadId;
+        
+        // Convert parentMessageId - handle ObjectId, string, null, undefined
+        let parentMessageId = null;
+        if (rawParentId !== null && rawParentId !== undefined) {
+          if (typeof rawParentId === 'object' && rawParentId.toString) {
+            // It's an ObjectId
+            parentMessageId = rawParentId.toString();
+          } else {
+            parentMessageId = String(rawParentId);
+          }
+        }
+        
+        // Convert threadId
+        let threadId = null;
+        if (rawThreadId !== null && rawThreadId !== undefined) {
+          if (typeof rawThreadId === 'object' && rawThreadId.toString) {
+            threadId = rawThreadId.toString();
+          } else {
+            threadId = String(rawThreadId);
+          }
+        }
+        
+        const decrypted = {
+          _id: msg._id,
+          groupId: msg.getDecryptedGroupId(),
+          senderId: msg.getDecryptedSenderId(),
+          message: msg.getDecryptedMessage(),
+          fileUrl: msg.getDecryptedFileUrl(),
+          parentMessageId: parentMessageId,
+          threadId: threadId,
+          title: msg.getDecryptedTitle(),
+          createdAt: msg.createdAt,
+          updatedAt: msg.updatedAt,
+        };
+        
+        // Debug logging for messages with parentMessageId
+        if (parentMessageId) {
+          console.log('[GET /group-messages] Found reply:', {
+            _id: String(msg._id),
+            parentMessageId: parentMessageId,
+            threadId: threadId,
+            rawParentId: rawParentId,
+            rawParentIdType: typeof rawParentId
+          });
+        }
+        
+        return decrypted;
+      })
       .filter(m => m.groupId === groupId);
+    
+    console.log('[GET /group-messages] Total messages for group:', decryptedMessages.length);
+    console.log('[GET /group-messages] Messages with parentMessageId:', decryptedMessages.filter(m => m.parentMessageId).length);
+    
+    // Second pass: resolve threadId for messages that don't have it set
+    // Create a map of message _id to threadId for quick lookup
+    const messageMap = new Map();
+    decryptedMessages.forEach(msg => {
+      messageMap.set(String(msg._id), msg);
+    });
+    
+    // Resolve threadId for each message
+    decryptedMessages.forEach(msg => {
+      if (!msg.threadId) {
+        if (msg.parentMessageId) {
+          // This is a reply - find parent and use its threadId
+          const parent = messageMap.get(msg.parentMessageId);
+          if (parent) {
+            msg.threadId = parent.threadId || String(parent._id);
+          } else {
+            // Parent not found in this batch, try to fetch it
+            // For now, use parent's _id as threadId (assuming parent is root)
+            msg.threadId = msg.parentMessageId;
+          }
+        } else {
+          // This is a root post - use its own _id
+          msg.threadId = String(msg._id);
+        }
+      }
+    });
     
     // Sort by createdAt (oldest first)
     decryptedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));

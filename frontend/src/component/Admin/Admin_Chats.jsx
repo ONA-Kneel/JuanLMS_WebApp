@@ -1,11 +1,12 @@
 // Admin_Chats.jsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import axios from "axios";
 import { useSocket } from "../../contexts/SocketContext.jsx";
 import uploadfile from "../../assets/uploadfile.png";
 import Admin_Navbar from "./Admin_Navbar";
 import ProfileMenu from "../ProfileMenu";
+import ForumModal from "../common/ForumModal.jsx";
 import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
@@ -58,6 +59,15 @@ export default function Admin_Chats() {
   const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [joinGroupId, setJoinGroupId] = useState("");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [showForumModal, setShowForumModal] = useState(false);
+  const [activeForumThreadId, setActiveForumThreadId] = useState(null);
+  const [forumPostTitle, setForumPostTitle] = useState("");
+  const [forumPostBody, setForumPostBody] = useState("");
+  const [forumReplyBody, setForumReplyBody] = useState("");
+  const [forumPostFiles, setForumPostFiles] = useState([]);
+  const [forumReplyFiles, setForumReplyFiles] = useState([]);
+  const [isPostingThread, setIsPostingThread] = useState(false);
+  const [isPostingReply, setIsPostingReply] = useState(false);
 
   // Add state for member search
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
@@ -69,6 +79,15 @@ export default function Admin_Chats() {
       return [];
     }
   });
+  const userLookup = useMemo(() => {
+    const map = new Map();
+    (users || []).forEach(user => {
+      if (user && user._id) {
+        map.set(user._id, user);
+      }
+    });
+    return map;
+  }, [users]);
   // Backend search results from users collection
   const [searchedUsers, setSearchedUsers] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -78,9 +97,6 @@ export default function Admin_Chats() {
   });
   
   // Add missing state variables for new chat functionality
-  const [_showNewChatModal, setShowNewChatModal] = useState(false);
-  const [_userSearchTerm, setUserSearchTerm] = useState("");
-
   // Add missing validationModal state
   const [validationModal, setValidationModal] = useState({
     isOpen: false,
@@ -105,7 +121,11 @@ export default function Admin_Chats() {
     if (!chatId) return;
     setHighlightedChats(prev => {
       const next = { ...prev, [chatId]: Date.now() };
-      try { localStorage.setItem('highlightedChats_admin', JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem('highlightedChats_admin', JSON.stringify(next));
+      } catch (err) {
+        console.error('Failed to persist highlighted chats', err);
+      }
       return next;
     });
   };
@@ -114,7 +134,11 @@ export default function Admin_Chats() {
     setHighlightedChats(prev => {
       if (!prev[chatId]) return prev;
       const { [chatId]: _omit, ...rest } = prev;
-      try { localStorage.setItem('highlightedChats_admin', JSON.stringify(rest)); } catch {}
+      try {
+        localStorage.setItem('highlightedChats_admin', JSON.stringify(rest));
+      } catch (err) {
+        console.error('Failed to update highlighted chats', err);
+      }
       return rest;
     });
   };
@@ -127,15 +151,28 @@ export default function Admin_Chats() {
   // Live refs to avoid stale closures in socket handlers
   const recentChatsRef = useRef([]);
   const selectedChatRef = useRef(null);
-  const isGroupChatRef = useRef(false);
   const usersRef = useRef([]);
   const lastSendRef = useRef(0);
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
+  const isForumChat = selectedChat?.isGroup && (selectedChat?.name || "").toLowerCase() === "sjdef forum";
+
+  useEffect(() => {
+    if (!isForumChat) {
+      setShowForumModal(false);
+    }
+  }, [isForumChat]);
 
   const storedUser = localStorage.getItem("user");
-  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+  const parsedCurrentUser = useMemo(() => {
+    try {
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch {
+      return null;
+    }
+  }, [storedUser]);
+  const currentUserId = parsedCurrentUser?._id || null;
 
   const navigate = useNavigate();
   // Sync refs with latest state
@@ -144,7 +181,7 @@ export default function Admin_Chats() {
   useEffect(() => { usersRef.current = users; }, [users]);
 
   // Fetch a single user by id and merge to cache/state
-  const fetchUserIfMissing = async (userId) => {
+  const fetchUserIfMissing = useCallback(async (userId) => {
     if (!userId) return null;
     const existing = users.find(u => u._id === userId);
     if (existing) return existing;
@@ -157,16 +194,85 @@ export default function Admin_Chats() {
         const fetched = res.data;
         setUsers(prev => {
           const next = [...prev.filter(u => u._id !== fetched._id), fetched];
-          try { localStorage.setItem('users_all_admin', JSON.stringify(next)); } catch {}
+          try {
+            localStorage.setItem('users_all_admin', JSON.stringify(next));
+          } catch (err) {
+            console.error('Failed to cache users', err);
+          }
           return next;
         });
         return fetched;
       }
     } catch (e) {
-      // ignore
+      if (e.response?.status === 404) {
+        console.warn(`User ${userId} not found when fetching for chat list`);
+      } else {
+        console.error('Error fetching user profile', e);
+      }
     }
     return null;
-  };
+  }, [users]);
+
+  // Fetch recent conversations (shared across effects & sockets)
+  const fetchRecentConversations = useCallback(async () => {
+    if (!currentUserId) return;
+    
+    try {
+      const token = localStorage.getItem("token");
+      let allMessages = [];
+      
+      try {
+        const res = await axios.get(`${API_BASE}/messages/user/${currentUserId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        allMessages = res.data || [];
+      } catch {
+        // rely on cached recent chats and socket updates if bulk fetch fails
+      }
+      
+      if (allMessages.length > 0) {
+        const conversationMap = new Map();
+        allMessages.forEach(message => {
+          const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
+          if (!conversationMap.has(otherUserId)) {
+            conversationMap.set(otherUserId, []);
+          }
+          conversationMap.get(otherUserId).push(message);
+        });
+        
+        const newRecentChats = [];
+        for (const [otherUserId, convMessages] of conversationMap) {
+          if (convMessages.length === 0) continue;
+          let otherUser = users.find(u => u._id === otherUserId);
+          if (!otherUser) {
+            otherUser = await fetchUserIfMissing(otherUserId);
+          }
+          if (otherUser && otherUser.firstname && otherUser.lastname &&
+              otherUser.firstname !== 'undefined' && otherUser.lastname !== 'undefined') {
+            const sortedMessages = convMessages.sort((a, b) => new Date(a.createdAt || a.updatedAt) - new Date(b.createdAt || b.updatedAt));
+            const lastMessage = sortedMessages[sortedMessages.length - 1];
+            
+            newRecentChats.push({
+              _id: otherUserId,
+              firstname: otherUser.firstname,
+              lastname: otherUser.lastname,
+              profilePic: otherUser.profilePic,
+              lastMessageTime: lastMessage.createdAt || lastMessage.updatedAt
+            });
+          }
+        }
+        
+        newRecentChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+        
+        if (newRecentChats.length > 0) {
+          setRecentChats(newRecentChats);
+          localStorage.setItem("recentChats_admin", JSON.stringify(newRecentChats));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching recent conversations:", error);
+    }
+  }, [currentUserId, users, fetchUserIfMissing]);
 
   // Compute last message preview for a chat (individual or group)
   const getLastPreview = (chat) => {
@@ -322,7 +428,10 @@ export default function Admin_Chats() {
       if (selectedChat && !selectedChat.isGroup && selectedChat._id === incomingMessage.senderId) {
         setTimeout(() => {
           setMessages(prev => ({ ...prev }));
-          try { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); } catch {}
+          const endRef = messagesEndRef.current;
+          if (endRef && typeof endRef.scrollIntoView === "function") {
+            endRef.scrollIntoView({ behavior: "smooth" });
+          }
         }, 25);
       }
     };
@@ -331,24 +440,39 @@ export default function Admin_Chats() {
 
     // Group chat message handling
     const handleIncomingGroup = (data) => {
+      // Normalize fields to ensure consistency
+      const normalizedParentId = data.parentMessageId && String(data.parentMessageId).trim() ? String(data.parentMessageId) : null;
+      const normalizedThreadId = data.threadId && String(data.threadId).trim() ? String(data.threadId) : (normalizedParentId ? null : (data._id ? String(data._id) : null));
+      const normalizedTitle = data.title && String(data.title).trim() ? String(data.title).trim() : null;
+      
       const incomingGroupMessage = {
+        _id: data._id || null,
         senderId: data.senderId,
         groupId: data.groupId,
-        message: data.text,
+        message: data.text || data.message || null,
         fileUrl: data.fileUrl || null,
         fileName: data.fileName || null,
+        parentMessageId: normalizedParentId,
+        threadId: normalizedThreadId,
+        title: normalizedTitle,
         senderName: data.senderName || "Unknown",
         senderFirstname: data.senderFirstname || "Unknown",
         senderLastname: data.senderLastname || "User",
         senderProfilePic: data.senderProfilePic || null,
-        createdAt: new Date().toISOString(),
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || null,
       };
 
       setGroupMessages((prev) => {
+        const existing = prev[incomingGroupMessage.groupId] || [];
+        // Check for duplicates by _id
+        if (incomingGroupMessage._id && existing.some(m => m._id === incomingGroupMessage._id)) {
+          return prev;
+        }
         const newGroupMessages = {
           ...prev,
           [incomingGroupMessage.groupId]: [
-            ...(prev[incomingGroupMessage.groupId] || []),
+            ...existing,
             incomingGroupMessage,
           ],
         };
@@ -386,13 +510,50 @@ export default function Admin_Chats() {
       });
     };
     ctxSocket.on("getGroupMessage", handleIncomingGroup);
+    
+    // Handle forum posts separately
+    const handleIncomingForumPost = (data) => {
+      // Normalize forum post data to match group message format
+      const incomingPost = {
+        _id: data._id || null,
+        senderId: data.senderId,
+        groupId: data.groupId,
+        message: data.text || data.message || null,
+        fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
+        parentMessageId: data.parentPostId || data.parentMessageId || null,
+        parentPostId: data.parentPostId || null,
+        threadId: data.threadId || null,
+        title: data.title || null,
+        isRootPost: data.isRootPost !== undefined ? data.isRootPost : !data.parentPostId,
+        senderName: data.senderName || "Unknown",
+        senderFirstname: data.senderFirstname || "Unknown",
+        senderLastname: data.senderLastname || "User",
+        senderProfilePic: data.senderProfilePic || null,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || null,
+      };
+
+      setGroupMessages((prev) => {
+        const existing = prev[incomingPost.groupId] || [];
+        if (incomingPost._id && existing.some(m => m._id === incomingPost._id)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [incomingPost.groupId]: [...existing, incomingPost],
+        };
+      });
+    };
+    ctxSocket.on("getForumPost", handleIncomingForumPost);
 
     return () => {
       ctxSocket.off("getMessage", handleIncomingDirect);
       ctxSocket.off("receiveMessage", handleIncomingDirect);
       ctxSocket.off("getGroupMessage", handleIncomingGroup);
+      ctxSocket.off("getForumPost", handleIncomingForumPost);
     };
-  }, [ctxSocket, isConnected, currentUserId, selectedChat, recentChats, users, userGroups]);
+  }, [ctxSocket, isConnected, currentUserId, selectedChat, recentChats, users, userGroups, fetchRecentConversations, fetchUserIfMissing]);
 
   // Consolidated data fetching function
   const fetchInitialData = async () => {
@@ -413,7 +574,11 @@ export default function Admin_Chats() {
       if (usersRes.status === 'fulfilled') {
         const userArray = Array.isArray(usersRes.value.data) ? usersRes.value.data : [];
         setUsers(userArray);
-        try { localStorage.setItem('users_all_admin', JSON.stringify(userArray)); } catch {}
+        try {
+          localStorage.setItem('users_all_admin', JSON.stringify(userArray));
+        } catch (err) {
+          console.error('Failed to cache users', err);
+        }
       } else {
         console.error("Error fetching users:", usersRes.reason);
         if (usersRes.reason?.response?.status === 401) {
@@ -443,92 +608,23 @@ export default function Admin_Chats() {
     }
   }, [currentUserId]);
 
-  // ================= FETCH RECENT CONVERSATIONS =================
-  const fetchRecentConversations = async () => {
-    if (!currentUserId) return;
-    
-    try {
-      const token = localStorage.getItem("token");
-      let allMessages = [];
-      
-      // First try to get all messages for the current user
-      try {
-        const res = await axios.get(`${API_BASE}/messages/user/${currentUserId}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        allMessages = res.data || [];
-      } catch {
-        // Disable slow per-user fallback; rely on cached recent chats and real-time updates
-      }
-      
-      if (allMessages.length > 0) {
-        // Group messages by conversation
-        const conversationMap = new Map();
-        allMessages.forEach(message => {
-          const otherUserId = message.senderId === currentUserId ? message.receiverId : message.senderId;
-          if (!conversationMap.has(otherUserId)) {
-            conversationMap.set(otherUserId, []);
-          }
-          conversationMap.get(otherUserId).push(message);
-        });
-        
-        // Create recent chats list from actual conversations
-        const newRecentChats = [];
-        for (const [otherUserId, messages] of conversationMap) {
-          if (messages.length > 0) {
-            // Find the user object
-            let otherUser = users.find(u => u._id === otherUserId);
-            if (!otherUser) {
-              // fetch minimal user profile if missing to avoid "Unknown User"
-              // eslint-disable-next-line no-await-in-loop
-              otherUser = await fetchUserIfMissing(otherUserId);
-            }
-            if (otherUser && otherUser.firstname && otherUser.lastname && 
-                otherUser.firstname !== 'undefined' && otherUser.lastname !== 'undefined') {
-              // Sort messages by date and get the latest
-              const sortedMessages = messages.sort((a, b) => new Date(a.createdAt || a.updatedAt) - new Date(b.createdAt || b.updatedAt));
-              const lastMessage = sortedMessages[sortedMessages.length - 1];
-              
-              newRecentChats.push({
-                _id: otherUserId,
-                firstname: otherUser.firstname,
-                lastname: otherUser.lastname,
-                profilePic: otherUser.profilePic,
-                lastMessageTime: lastMessage.createdAt || lastMessage.updatedAt
-              });
-            }
-          }
-        }
-        
-        // Sort by most recent message
-        newRecentChats.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
-        
-        // Update recentChats with actual conversations
-        if (newRecentChats.length > 0) {
-          setRecentChats(newRecentChats);
-          localStorage.setItem("recentChats_admin", JSON.stringify(newRecentChats));
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching recent conversations:", error);
-    }
-  };
-
   useEffect(() => {
     // Run immediately if we have the required data
     if (currentUserId && users.length > 0) {
       fetchRecentConversations();
     }
-  }, [currentUserId, users]); // Dependencies ensure it runs when data is available
+  }, [currentUserId, users, fetchRecentConversations]); // Dependencies ensure it runs when data is available
 
   // Lightweight polling fallback for production where sockets may be blocked or cross-instance
   useEffect(() => {
     if (!currentUserId) return;
     const id = setInterval(() => {
-      try { fetchRecentConversations(); } catch {}
+      fetchRecentConversations().catch(err => {
+        console.error('Polling recent conversations failed', err);
+      });
     }, 4000);
     return () => clearInterval(id);
-  }, [currentUserId]);
+  }, [currentUserId, fetchRecentConversations]);
 
   // Clean up any corrupted data in recentChats
   useEffect(() => {
@@ -577,7 +673,10 @@ export default function Admin_Chats() {
     const fetchMessages = async () => {
       if (!selectedChat) return;
       try {
-        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`${API_BASE}/messages/${currentUserId}/${selectedChat._id}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         setMessages((prev) => {
           const newMessages = { ...prev, [selectedChat._id]: res.data };
           
@@ -602,6 +701,9 @@ export default function Admin_Chats() {
         });
       } catch (err) {
         console.error("Error fetching messages:", err);
+        if (err.response?.status === 401) {
+          window.location.href = "/";
+        }
       }
     };
 
@@ -609,10 +711,267 @@ export default function Admin_Chats() {
   }, [selectedChat, currentUserId, recentChats]);
 
   // Auto-scroll
-  const selectedChatMessages = messages[selectedChat?._id] || [];
+  const renderedMessages = useMemo(() => {
+    if (!selectedChat) return [];
+    if (selectedChat.isGroup) {
+      return groupMessages[selectedChat._id] || [];
+    }
+    return messages[selectedChat._id] || [];
+  }, [selectedChat, groupMessages, messages]);
+
   useEffect(() => {
+    if (isForumChat) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [selectedChatMessages]);
+  }, [renderedMessages, isForumChat]);
+
+  const forumThreads = useMemo(() => {
+    if (!isForumChat || !selectedChat?._id) return [];
+    const sourceMessages = groupMessages[selectedChat._id] || [];
+    
+    // Debug: Log all messages to see their structure
+    if (sourceMessages.length > 0) {
+      console.log('[ForumThreads] Processing messages:', sourceMessages.length);
+      sourceMessages.forEach((msg, idx) => {
+        console.log(`[ForumThreads] Message ${idx}:`, {
+          _id: msg._id,
+          parentMessageId: msg.parentMessageId,
+          threadId: msg.threadId,
+          title: msg.title,
+          hasParent: !!msg.parentMessageId,
+          parentType: typeof msg.parentMessageId,
+          messagePreview: msg.message?.substring(0, 30)
+        });
+      });
+    }
+    
+    const threadMap = new Map();
+    const messageMap = new Map(); // Map of _id to message for quick lookup
+    
+    // First, create a map of all messages by _id for quick parent lookup
+    sourceMessages.forEach(msg => {
+      const msgId = msg._id ? String(msg._id) : null;
+      if (msgId) {
+        messageMap.set(msgId, msg);
+      }
+    });
+    
+    // Process messages in two passes: root posts first, then replies
+    const rootPosts = [];
+    const replies = [];
+    
+    sourceMessages.forEach(msg => {
+      // Use isRootPost if available (from new forum API)
+      if (msg.isRootPost === false) {
+        // This is definitely a reply
+        replies.push(msg);
+        return;
+      }
+      if (msg.isRootPost === true) {
+        // This is definitely a root post
+        rootPosts.push(msg);
+        return;
+      }
+      
+      // Fallback: check parentMessageId/parentPostId
+      let msgParentId = null;
+      const rawParentId = msg.parentMessageId || msg.parentPostId;
+      if (rawParentId !== null && rawParentId !== undefined) {
+        const parentStr = String(rawParentId).trim();
+        if (parentStr && parentStr !== 'null' && parentStr !== 'undefined' && parentStr !== '') {
+          msgParentId = parentStr;
+        }
+      }
+      
+      if (msgParentId) {
+        replies.push(msg);
+      } else {
+        rootPosts.push(msg);
+      }
+    });
+    
+    console.log('[ForumThreads] Categorized:', { rootPosts: rootPosts.length, replies: replies.length });
+    
+    // First pass: Process root posts
+    rootPosts.forEach(msg => {
+      const msgThreadId = msg.threadId && String(msg.threadId).trim() ? String(msg.threadId) : null;
+      const msgId = msg._id ? String(msg._id) : null;
+      
+      // For root posts, threadId should be the message's own _id
+      const threadKey = msgThreadId || msgId;
+      if (!threadKey) {
+        console.warn('Skipping root post without _id:', msg);
+        return;
+      }
+      
+      const key = String(threadKey);
+      if (!threadMap.has(key)) {
+        threadMap.set(key, { threadId: key, root: null, rootTimestamp: 0, replies: [] });
+      }
+      const thread = threadMap.get(key);
+      const timestamp = new Date(msg.createdAt || msg.updatedAt || 0).getTime();
+      
+      if (!thread.root) {
+        thread.root = msg;
+        thread.rootTimestamp = timestamp;
+      } else if (timestamp < thread.rootTimestamp) {
+        // This root post is older, make it the root
+        thread.replies.push(thread.root);
+        thread.root = msg;
+        thread.rootTimestamp = timestamp;
+      } else {
+        // This root post is newer, add to replies (shouldn't happen normally)
+        thread.replies.push(msg);
+      }
+    });
+    
+    // Second pass: Process replies
+    replies.forEach(msg => {
+      // Normalize parentMessageId again
+      let msgParentId = null;
+      if (msg.parentMessageId) {
+        const parentStr = String(msg.parentMessageId).trim();
+        if (parentStr && parentStr !== 'null' && parentStr !== 'undefined' && parentStr !== '') {
+          msgParentId = parentStr;
+        }
+      }
+      
+      const msgThreadId = msg.threadId && String(msg.threadId).trim() ? String(msg.threadId) : null;
+      
+      let threadKey = msgThreadId;
+      
+      // If threadId is missing, find parent and use its threadId
+      if (!threadKey && msgParentId) {
+        const parentMsg = messageMap.get(msgParentId);
+        if (parentMsg) {
+          // If parent is also a reply, recursively find the root
+          let currentParent = parentMsg;
+          let depth = 0;
+          while (currentParent && currentParent.parentMessageId && depth < 10) {
+            const parentId = String(currentParent.parentMessageId).trim();
+            if (parentId && parentId !== 'null') {
+              currentParent = messageMap.get(parentId);
+              depth++;
+            } else {
+              break;
+            }
+          }
+          
+          // Now get threadId from the root parent
+          const rootThreadId = currentParent?.threadId && String(currentParent.threadId).trim()
+            ? String(currentParent.threadId)
+            : (currentParent && !currentParent.parentMessageId ? String(currentParent._id) : null);
+          
+          if (rootThreadId) {
+            threadKey = rootThreadId;
+            // Update the message's threadId for consistency
+            msg.threadId = rootThreadId;
+          } else if (currentParent && !currentParent.parentMessageId) {
+            // Parent is a root post
+            threadKey = String(currentParent._id);
+            msg.threadId = threadKey;
+          }
+        } else {
+          // Parent not in message list - use parentMessageId as threadId (assuming parent is root)
+          threadKey = msgParentId;
+          msg.threadId = threadKey;
+        }
+      }
+      
+      if (!threadKey) {
+        console.error('Skipping reply without valid threadId or parent:', {
+          _id: msg._id,
+          parentMessageId: msg.parentMessageId,
+          threadId: msg.threadId,
+          message: msg.message?.substring(0, 50)
+        });
+        return;
+      }
+      
+      const key = String(threadKey);
+      if (!threadMap.has(key)) {
+        // Parent thread doesn't exist yet - this shouldn't happen, but create placeholder
+        console.warn('Reply found before its parent thread, creating placeholder thread:', {
+          key,
+          replyId: msg._id,
+          parentId: msgParentId
+        });
+        threadMap.set(key, { threadId: key, root: null, rootTimestamp: 0, replies: [] });
+      }
+      
+      const thread = threadMap.get(key);
+      // Replies should NEVER be root posts - always add to replies array
+      thread.replies.push(msg);
+    });
+
+    return Array.from(threadMap.values())
+      .filter(thread => {
+        // Only return threads that have a root post
+        // Also ensure the root post doesn't have a parentMessageId (shouldn't happen, but safety check)
+        if (!thread.root) return false;
+        const rootParentId = thread.root.parentMessageId;
+        if (rootParentId) {
+          const parentStr = String(rootParentId).trim();
+          if (parentStr && parentStr !== 'null' && parentStr !== 'undefined' && parentStr !== '') {
+            console.error('Root post has parentMessageId - this should not happen:', {
+              rootId: thread.root._id,
+              parentId: rootParentId,
+              threadId: thread.threadId
+            });
+            return false; // Don't show corrupted threads
+          }
+        }
+        return true;
+      })
+      .map(thread => {
+        // Final safety check: filter out any replies that somehow ended up in root
+        const cleanReplies = thread.replies.filter(reply => {
+          const replyParentId = reply.parentMessageId;
+          if (!replyParentId) {
+            console.warn('Reply without parentMessageId found in replies array:', reply._id);
+            return false;
+          }
+          return true;
+        });
+        
+        return {
+          threadId: thread.threadId,
+          root: thread.root,
+          replies: cleanReplies.sort(
+            (a, b) => new Date(a.createdAt || a.updatedAt || 0) - new Date(b.createdAt || b.updatedAt || 0)
+          ),
+        };
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.root?.createdAt || b.root?.updatedAt || 0) -
+          new Date(a.root?.createdAt || a.root?.updatedAt || 0)
+      );
+  }, [isForumChat, groupMessages, selectedChat?._id]);
+
+  const activeForumThread = useMemo(() => {
+    if (!forumThreads.length) return null;
+    if (!activeForumThreadId) return forumThreads[0];
+    return forumThreads.find(thread => thread.threadId === activeForumThreadId) || forumThreads[0];
+  }, [forumThreads, activeForumThreadId]);
+
+  useEffect(() => {
+    if (!isForumChat) {
+      setActiveForumThreadId(null);
+      setForumPostTitle("");
+      setForumPostBody("");
+      setForumPostFiles([]);
+      setForumReplyBody("");
+      setForumReplyFiles([]);
+      return;
+    }
+    if (forumThreads.length === 0) {
+      setActiveForumThreadId(null);
+      return;
+    }
+    if (!activeForumThreadId || !forumThreads.some(thread => thread.threadId === activeForumThreadId)) {
+      setActiveForumThreadId(forumThreads[0].threadId);
+    }
+  }, [isForumChat, forumThreads, activeForumThreadId]);
 
   // ================= HANDLERS =================
   const handleSyncGroupMembers = async () => {
@@ -712,7 +1071,6 @@ export default function Admin_Chats() {
 
       // 2) Send each selected file as its own message with empty text
       for (const file of (selectedFiles || [])) {
-        console.log('Sending file:', file.name, 'Type:', file.type, 'Size:', file.size);
         const fileForm = new FormData();
         fileForm.append("senderId", currentUserId);
         fileForm.append("receiverId", selectedChat._id);
@@ -728,15 +1086,6 @@ export default function Admin_Chats() {
           });
 
           const fileMessage = fileRes.data;
-          console.log('File sent successfully:', fileMessage);
-          console.log('File message details:', {
-            hasFileUrl: !!fileMessage.fileUrl,
-            hasFileName: !!fileMessage.fileName,
-            fileUrl: fileMessage.fileUrl,
-            fileName: fileMessage.fileName,
-            messageId: fileMessage._id
-          });
-          
           ctxSocket?.emit("sendMessage", {
             senderId: currentUserId,
             receiverId: selectedChat._id,
@@ -745,14 +1094,10 @@ export default function Admin_Chats() {
             fileName: fileMessage.fileName || null,
           });
 
-          setMessages((prev) => {
-            const updated = {
+          setMessages((prev) => ({
               ...prev,
               [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
-            };
-            console.log('Updated messages state for chat:', selectedChat._id, 'Total messages:', updated[selectedChat._id]?.length);
-            return updated;
-          });
+          }));
           setLastMessages(prev => ({
             ...prev,
             [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
@@ -809,6 +1154,224 @@ export default function Admin_Chats() {
     fileInputRef.current.click();
   };
 
+  const handleForumFileSelect = (e, target = "post") => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const dedupe = (prev, additions) => {
+      const existing = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+      const next = additions.filter(f => !existing.has(`${f.name}|${f.size}|${f.lastModified}`));
+      return [...prev, ...next];
+    };
+    if (target === "reply") {
+      setForumReplyFiles(prev => dedupe(prev, files));
+    } else {
+      setForumPostFiles(prev => dedupe(prev, files));
+    }
+    e.target.value = null;
+  };
+
+  const removeForumFile = (target, index) => {
+    if (target === "reply") {
+      setForumReplyFiles(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setForumPostFiles(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const emitGroupSocketMessage = (message, targetGroupId = selectedChat?._id) => {
+    if (!ctxSocket || !targetGroupId || !message) return;
+    ctxSocket.emit("sendGroupMessage", {
+      senderId: currentUserId,
+      groupId: targetGroupId,
+      text: message.message,
+      fileUrl: message.fileUrl || null,
+      fileName: message.fileName || null,
+      senderName: parsedCurrentUser ? `${parsedCurrentUser.firstname} ${parsedCurrentUser.lastname}` : "Unknown",
+      senderFirstname: parsedCurrentUser ? parsedCurrentUser.firstname : "Unknown",
+      senderLastname: parsedCurrentUser ? parsedCurrentUser.lastname : "User",
+      senderProfilePic: parsedCurrentUser ? parsedCurrentUser.profilePic : null,
+      threadId: message.threadId || null,
+      parentMessageId: message.parentMessageId || null,
+      title: message.title || null,
+    });
+  };
+
+  const appendGroupMessageToState = (message, targetGroupId = selectedChat?._id) => {
+    if (!targetGroupId || !message) return;
+    setGroupMessages((prev) => {
+      const existing = prev[targetGroupId] || [];
+      if (existing.some(m => m._id === message._id)) {
+        return prev;
+      }
+      // Normalize message fields to ensure consistency
+      const normalizedMessage = {
+        ...message,
+        parentMessageId: message.parentMessageId && String(message.parentMessageId).trim() ? String(message.parentMessageId) : null,
+        threadId: message.threadId && String(message.threadId).trim() ? String(message.threadId) : (message.parentMessageId ? null : (message._id ? String(message._id) : null)),
+        title: message.title && String(message.title).trim() ? String(message.title).trim() : null,
+      };
+      return {
+        ...prev,
+        [targetGroupId]: [...existing, normalizedMessage],
+      };
+    });
+    const previewText = message.message ? message.message : (message.fileUrl ? 'File sent' : '');
+    setLastMessages(prev => ({
+      ...prev,
+      [targetGroupId]: {
+        prefix: message.senderId === currentUserId ? 'You: ' : `${message.senderName || 'Member'}: `,
+        text: previewText
+      }
+    }));
+  };
+
+  const getAttachmentMeta = (msg) => {
+    if (!msg?.fileUrl) return null;
+    const isFullUrl = /^https?:\/\//i.test(msg.fileUrl);
+    const resolvedUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
+    let resolvedName = msg.fileName;
+    if (!resolvedName) {
+      const urlParts = msg.fileUrl.split('/');
+      const lastPart = urlParts[urlParts.length - 1]?.split('?')[0];
+      resolvedName = msg.fileUrl.includes('/raw/upload/') ? `attachment_${lastPart}` : (lastPart || 'attachment');
+    }
+    const lowerName = resolvedName.toLowerCase();
+    const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(lowerName);
+    const isExcel = /\.(xlsx|xls|csv)$/i.test(lowerName);
+    const isPDF = lowerName.endsWith('.pdf');
+    const isWord = lowerName.endsWith('.doc') || lowerName.endsWith('.docx');
+    const isPowerPoint = lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx');
+    return {
+      fileUrl: resolvedUrl,
+      fileName: resolvedName,
+      isImage,
+      isExcel,
+      isPDF,
+      isWord,
+      isPowerPoint,
+      isCloudinaryRaw: resolvedUrl.includes('res.cloudinary.com') && resolvedUrl.includes('/raw/upload/')
+    };
+  };
+
+  const renderAttachmentPreview = (msg, isOwnBubble = false) => {
+    if (!msg?.fileUrl) return null;
+    const meta = getAttachmentMeta(msg);
+    if (!meta) return null;
+    const handleDownload = async (e) => {
+      e.preventDefault();
+      try {
+        let downloadUrl = meta.fileUrl;
+        if (meta.fileUrl.includes('res.cloudinary.com')) {
+          const separator = meta.fileUrl.includes('?') ? '&' : '?';
+          downloadUrl = `${meta.fileUrl}${separator}fl_attachment:${encodeURIComponent(meta.fileName)}`;
+        }
+        const response = await fetch(downloadUrl, { method: 'GET', mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file: ${response.status}`);
+        }
+        let blob;
+        if (meta.isCloudinaryRaw) {
+          const arrayBuffer = await response.arrayBuffer();
+          let mimeType = response.headers.get('content-type') || 'application/octet-stream';
+          if (meta.fileName.endsWith('.xlsx')) mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          else if (meta.fileName.endsWith('.xls') || meta.fileName.endsWith('.csv')) mimeType = 'application/vnd.ms-excel';
+          else if (meta.fileName.endsWith('.pdf')) mimeType = 'application/pdf';
+          else if (meta.fileName.endsWith('.docx')) mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          else if (meta.fileName.endsWith('.doc')) mimeType = 'application/msword';
+          blob = new Blob([arrayBuffer], { type: mimeType });
+        } else {
+          blob = await response.blob();
+        }
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = meta.fileName;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        }, 120);
+      } catch (error) {
+        console.error('Error downloading file:', error);
+        if (meta.fileUrl.includes('res.cloudinary.com')) {
+          const separator = meta.fileUrl.includes('?') ? '&' : '?';
+          const fallbackUrl = `${meta.fileUrl}${separator}fl_attachment:${encodeURIComponent(meta.fileName)}`;
+          window.open(fallbackUrl, '_blank');
+        } else {
+          window.open(meta.fileUrl, '_blank');
+        }
+      }
+    };
+
+    if (meta.isImage) {
+      return (
+        <a href={meta.fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleDownload}>
+          <img
+            src={meta.fileUrl}
+            alt="Attachment preview"
+            className="rounded-md max-h-56 max-w-full object-contain border border-white/30 mt-2"
+            loading="lazy"
+          />
+        </a>
+      );
+    }
+
+    return (
+      <a
+        href={meta.fileUrl}
+        onClick={handleDownload}
+        className={`${isOwnBubble ? "text-blue-100" : "text-blue-700"} underline decoration-current/40 hover:decoration-current flex items-center gap-2 cursor-pointer mt-2`}
+      >
+        {meta.isExcel && "📊"}
+        {meta.isPDF && "📄"}
+        {meta.isWord && "📝"}
+        {meta.isPowerPoint && "📊"}
+        {!meta.isExcel && !meta.isPDF && !meta.isWord && !meta.isPowerPoint && "📎"}
+        <span>
+          {meta.isExcel ? "Excel File" :
+            meta.isPDF ? "PDF Document" :
+            meta.isWord ? "Word Document" :
+            meta.isPowerPoint ? "PowerPoint" :
+            "Attachment"}
+        </span>
+        <span className="text-xs opacity-75">
+          ({meta.fileName.startsWith('attachment_') ? 'File' : meta.fileName})
+        </span>
+      </a>
+    );
+  };
+
+  const getSenderDisplayName = (message) => {
+    if (!message) return "Unknown User";
+    const cachedUser = message.senderId ? userLookup.get(message.senderId) : null;
+    if (cachedUser?.lastname && cachedUser?.firstname) {
+      return `${cachedUser.lastname}, ${cachedUser.firstname}`;
+    }
+    if (message.senderName) return message.senderName;
+    if (message.senderLastname || message.senderFirstname) {
+      const last = message.senderLastname ? `${message.senderLastname}` : "";
+      const first = message.senderFirstname ? `${message.senderFirstname}` : "";
+      return `${last}${last && first ? ", " : ""}${first}`.trim() || "Unknown User";
+    }
+    return "Unknown User";
+  };
+
+  const getSenderAvatar = (message) => {
+    const cachedUser = message?.senderId ? userLookup.get(message.senderId) : null;
+    return cachedUser?.profilePic || message?.senderProfilePic || null;
+  };
+
+  const formatForumTimestamp = (timestamp, includeYear = false) => {
+    if (!timestamp) return '';
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const options = includeYear
+      ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    return parsed.toLocaleString('en-US', options);
+  };
+
   const hideGroup = (groupId) => {
     if (!groupId) return;
     setHiddenGroupIds(prev => {
@@ -820,17 +1383,6 @@ export default function Admin_Chats() {
     if (selectedChat && selectedChat.isGroup && selectedChat._id === groupId) {
       setSelectedChat(null);
     }
-  };
-
-  // Handle starting a new chat with a user
-  const handleStartNewChat = (user) => {
-    setSelectedChat(user);
-    
-    // Don't add to recent chats until they actually send a message
-    // This ensures only users with actual conversations appear in sidebar
-    
-    setShowNewChatModal(false);
-    setUserSearchTerm("");
   };
 
   // Keep recentChats in sync with localStorage
@@ -890,7 +1442,8 @@ export default function Admin_Chats() {
         });
         const arr = Array.isArray(res.data) ? res.data : [];
         setSearchedUsers(arr);
-      } catch (e) {
+      } catch (error) {
+        console.error("User search failed:", error);
         setSearchedUsers([]);
       } finally {
         setIsSearching(false);
@@ -1004,7 +1557,7 @@ export default function Admin_Chats() {
     return () => {
       if (typeof cleanup === 'function') cleanup();
     };
-  }, [currentUserId]);
+  }, [currentUserId, ctxSocket]);
 
   // Fetch group messages when group is selected
   useEffect(() => {
@@ -1012,11 +1565,80 @@ export default function Admin_Chats() {
       if (!selectedChat || !selectedChat.isGroup) return;
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`, {
+        // Use forum-posts API for forum chats, group-messages for regular group chats
+        const isForum = selectedChat.name && selectedChat.name.toLowerCase() === "sjdef forum";
+        const apiEndpoint = isForum 
+          ? `${API_BASE}/forum-posts/${selectedChat._id}?userId=${currentUserId}`
+          : `${API_BASE}/group-messages/${selectedChat._id}?userId=${currentUserId}`;
+        
+        const res = await axios.get(apiEndpoint, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         setGroupMessages((prev) => {
-          const newMessages = { ...prev, [selectedChat._id]: res.data };
+          // Normalize messages: ensure parentMessageId, threadId, and title are properly set
+          const normalizedMessages = (res.data || []).map(msg => {
+            // Handle forum posts (parentPostId) vs group messages (parentMessageId)
+            const rawParentId = msg.parentPostId || msg.parentMessageId;
+            // Handle parentMessageId/parentPostId - could be ObjectId, string, null, or undefined
+            let normalizedParentId = null;
+            if (rawParentId !== null && rawParentId !== undefined) {
+              // Handle ObjectId objects (they have toString method)
+              if (typeof rawParentId === 'object' && rawParentId.toString) {
+                const parentStr = rawParentId.toString().trim();
+                if (parentStr && parentStr !== 'null' && parentStr !== 'undefined') {
+                  normalizedParentId = parentStr;
+                }
+              } else {
+                const parentStr = String(rawParentId).trim();
+                if (parentStr && parentStr !== 'null' && parentStr !== 'undefined' && parentStr !== '') {
+                  normalizedParentId = parentStr;
+                }
+              }
+            }
+            
+            // For forum posts, use isRootPost if available
+            const isRoot = msg.isRootPost !== undefined ? msg.isRootPost : !normalizedParentId;
+            
+            // Handle threadId - could be ObjectId, string, null, or undefined
+            let normalizedThreadId = null;
+            if (msg.threadId !== null && msg.threadId !== undefined) {
+              if (typeof msg.threadId === 'object' && msg.threadId.toString) {
+                const threadStr = msg.threadId.toString().trim();
+                if (threadStr && threadStr !== 'null' && threadStr !== 'undefined') {
+                  normalizedThreadId = threadStr;
+                }
+              } else {
+                const threadStr = String(msg.threadId).trim();
+                if (threadStr && threadStr !== 'null' && threadStr !== 'undefined' && threadStr !== '') {
+                  normalizedThreadId = threadStr;
+                }
+              }
+            }
+            
+            // For replies, don't default threadId to _id - it should come from parent
+            // For root posts, if threadId is missing, use _id
+            if (!normalizedThreadId && !normalizedParentId && msg._id) {
+              normalizedThreadId = String(msg._id);
+            }
+            
+            return {
+              ...msg,
+              parentMessageId: normalizedParentId,
+              parentPostId: normalizedParentId, // For compatibility
+              threadId: normalizedThreadId,
+              title: msg.title && String(msg.title).trim() ? String(msg.title).trim() : null,
+              isRootPost: isRoot,
+            };
+          });
+          
+          console.log('[FetchGroupMessages] Normalized messages:', normalizedMessages.map(m => ({
+            _id: m._id,
+            parentMessageId: m.parentMessageId,
+            threadId: m.threadId,
+            title: m.title
+          })));
+          
+          const newMessages = { ...prev, [selectedChat._id]: normalizedMessages };
           
           // Compute last messages for all groups
           const newLastMessages = {};
@@ -1224,7 +1846,6 @@ export default function Admin_Chats() {
     setIsSending(true);
     try {
       const token = localStorage.getItem("token");
-      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
       // 1) Send text message first if present
       if (newMessage.trim()) {
@@ -1240,30 +1861,12 @@ export default function Admin_Chats() {
           },
         });
         const textMessage = textRes.data;
-        ctxSocket?.emit("sendGroupMessage", {
-          senderId: currentUserId,
-          groupId: selectedChat._id,
-          text: textMessage.message,
-          fileUrl: textMessage.fileUrl || null,
-          fileName: textMessage.fileName || null,
-          senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
-          senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
-          senderLastname: parsedUser ? parsedUser.lastname : "User",
-          senderProfilePic: parsedUser ? parsedUser.profilePic : null,
-        });
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedChat._id]: [...(prev[selectedChat._id] || []), textMessage],
-        }));
-        setLastMessages(prev => ({
-          ...prev,
-          [selectedChat._id]: { prefix: 'You: ', text: textMessage.message }
-        }));
+        emitGroupSocketMessage(textMessage, selectedChat._id);
+        appendGroupMessageToState(textMessage, selectedChat._id);
       }
 
       // 2) Send each selected file as its own message with empty text
       for (const file of (selectedFiles || [])) {
-        console.log('Sending group file:', file.name, 'Type:', file.type, 'Size:', file.size);
         const fileForm = new FormData();
         fileForm.append("groupId", selectedChat._id);
         fileForm.append("senderId", currentUserId);
@@ -1278,27 +1881,8 @@ export default function Admin_Chats() {
             },
           });
           const fileMessage = fileRes.data;
-          console.log('Group file sent successfully:', fileMessage);
-          
-          ctxSocket?.emit("sendGroupMessage", {
-            senderId: currentUserId,
-            groupId: selectedChat._id,
-            text: fileMessage.message,
-            fileUrl: fileMessage.fileUrl || null,
-            fileName: fileMessage.fileName || null,
-            senderName: parsedUser ? `${parsedUser.firstname} ${parsedUser.lastname}` : "Unknown",
-            senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
-            senderLastname: parsedUser ? parsedUser.lastname : "User",
-            senderProfilePic: parsedUser ? parsedUser.profilePic : null,
-          });
-          setGroupMessages((prev) => ({
-            ...prev,
-            [selectedChat._id]: [...(prev[selectedChat._id] || []), fileMessage],
-          }));
-          setLastMessages(prev => ({
-            ...prev,
-            [selectedChat._id]: { prefix: 'You: ', text: fileMessage.fileUrl ? 'File sent' : '' }
-          }));
+          emitGroupSocketMessage(fileMessage, selectedChat._id);
+          appendGroupMessageToState(fileMessage, selectedChat._id);
         } catch (fileError) {
           console.error('Error sending group file:', fileError);
           setValidationModal({
@@ -1321,6 +1905,253 @@ export default function Admin_Chats() {
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const sendThreadedGroupMessage = async ({ text, files = [], parentMessageId = null, title = "" }) => {
+    if (!selectedChat || !selectedChat._id) return null;
+    const token = localStorage.getItem("token");
+    let latestMessage = null;
+
+    // Use forum-posts API for forum chats, group-messages for regular group chats
+    const isForum = isForumChat;
+    const apiEndpoint = isForum ? `${API_BASE}/forum-posts` : `${API_BASE}/group-messages`;
+
+    // Normalize parentMessageId to string
+    const normalizedParentId = parentMessageId 
+      ? (typeof parentMessageId === 'object' && parentMessageId.toString 
+          ? parentMessageId.toString() 
+          : String(parentMessageId))
+      : null;
+
+    console.log('[sendThreadedGroupMessage] Sending:', {
+      isForum,
+      apiEndpoint,
+      hasText: !!text,
+      hasFiles: files.length > 0,
+      parentMessageId: normalizedParentId,
+      title: title
+    });
+
+    if (text && text.trim()) {
+      const textForm = new FormData();
+      textForm.append("groupId", selectedChat._id);
+      textForm.append("senderId", currentUserId);
+      textForm.append("message", text.trim());
+      if (isForum) {
+        // Forum API uses parentPostId
+        if (normalizedParentId) {
+          textForm.append("parentPostId", normalizedParentId);
+        }
+        if (!normalizedParentId && title?.trim()) {
+          textForm.append("title", title.trim());
+        }
+      } else {
+        // Group messages API uses parentMessageId
+        if (normalizedParentId) {
+          textForm.append("parentMessageId", normalizedParentId);
+        }
+        if (!normalizedParentId && title?.trim()) {
+          textForm.append("title", title.trim());
+        }
+      }
+      const textRes = await axios.post(apiEndpoint, textForm, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${token}`
+        },
+      });
+      latestMessage = textRes.data;
+      
+      // Normalize response to common format
+      if (isForum) {
+        latestMessage.parentMessageId = latestMessage.parentPostId || null;
+        latestMessage.isRootPost = latestMessage.isRootPost !== undefined ? latestMessage.isRootPost : !latestMessage.parentPostId;
+      }
+      
+      console.log('[sendThreadedGroupMessage] Response received:', {
+        _id: latestMessage._id,
+        parentMessageId: latestMessage.parentMessageId || latestMessage.parentPostId,
+        threadId: latestMessage.threadId,
+        title: latestMessage.title,
+        isRootPost: latestMessage.isRootPost
+      });
+      
+      if (!latestMessage.threadId) {
+        latestMessage.threadId = normalizedParentId || latestMessage._id;
+      }
+      if (!parentMessageId && title?.trim() && !latestMessage.title) {
+        latestMessage.title = title.trim();
+      }
+      
+      if (isForum) {
+        // For forum posts, add to forum-specific state
+        appendGroupMessageToState(latestMessage, selectedChat._id);
+      } else {
+        emitGroupSocketMessage(latestMessage, selectedChat._id);
+        appendGroupMessageToState(latestMessage, selectedChat._id);
+      }
+    }
+
+    const attachmentParentId = normalizedParentId || latestMessage?._id || null;
+    const fallbackThreadId = latestMessage?.threadId || normalizedParentId || null;
+
+    for (const file of files) {
+      const fileForm = new FormData();
+      fileForm.append("groupId", selectedChat._id);
+      fileForm.append("senderId", currentUserId);
+      fileForm.append("message", "");
+      if (isForum) {
+        if (attachmentParentId) {
+          fileForm.append("parentPostId", attachmentParentId);
+        }
+      } else {
+        if (attachmentParentId) {
+          fileForm.append("parentMessageId", attachmentParentId);
+        }
+      }
+      fileForm.append("file", file);
+
+      try {
+        const fileRes = await axios.post(apiEndpoint, fileForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        });
+        const savedAttachment = fileRes.data;
+        
+        // Normalize response
+        if (isForum) {
+          savedAttachment.parentMessageId = savedAttachment.parentPostId || null;
+          savedAttachment.isRootPost = savedAttachment.isRootPost !== undefined ? savedAttachment.isRootPost : !savedAttachment.parentPostId;
+        }
+        
+        if (fallbackThreadId && !savedAttachment.threadId) {
+          savedAttachment.threadId = fallbackThreadId;
+        }
+        if (!savedAttachment.parentMessageId && attachmentParentId) {
+          savedAttachment.parentMessageId = attachmentParentId;
+        }
+        
+        if (!isForum) {
+          emitGroupSocketMessage(savedAttachment, selectedChat._id);
+        }
+        appendGroupMessageToState(savedAttachment, selectedChat._id);
+      } catch (fileError) {
+        console.error('Error sending forum attachment:', fileError);
+        setValidationModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Attachment Failed',
+          message: `Failed to upload "${file.name}". ${fileError.response?.data?.error || fileError.message}`
+        });
+      }
+    }
+
+    return latestMessage;
+  };
+
+  const handleCreateForumPost = async () => {
+    if (!isForumChat || !selectedChat) return;
+    if (!forumPostTitle.trim()) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Title',
+        message: "Please provide a topic title for the forum post."
+      });
+      return;
+    }
+    if (!forumPostBody.trim() && forumPostFiles.length === 0) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Nothing to Post',
+        message: "Add a description or at least one attachment before posting."
+      });
+      return;
+    }
+    setIsPostingThread(true);
+    try {
+      const created = await sendThreadedGroupMessage({
+        text: forumPostBody.trim(),
+        files: forumPostFiles,
+        parentMessageId: null,
+        title: forumPostTitle.trim()
+      });
+      if (created) {
+        setActiveForumThreadId(created.threadId || created._id);
+      }
+      setForumPostTitle("");
+      setForumPostBody("");
+      setForumPostFiles([]);
+    } catch (err) {
+      console.error('Error creating forum post:', err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Post Failed',
+        message: err.response?.data?.error || "Unable to create the forum post."
+      });
+    } finally {
+      setIsPostingThread(false);
+    }
+  };
+
+  const handleReplyToThread = async () => {
+    if (!isForumChat || !selectedChat || !activeForumThreadId) return;
+    const rootMessage = activeForumThread?.root || (groupMessages[selectedChat._id] || []).find(msg => msg.threadId === activeForumThreadId && !msg.parentMessageId);
+    if (!rootMessage) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Thread Missing',
+        message: "Unable to find the selected discussion thread."
+      });
+      return;
+    }
+    if (!forumReplyBody.trim() && forumReplyFiles.length === 0) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Empty Reply',
+        message: "Add a reply message or attach a file."
+      });
+      return;
+    }
+    
+    // Ensure rootMessage._id is a string
+    const rootMessageId = rootMessage._id ? String(rootMessage._id) : null;
+    console.log('[handleReplyToThread] Replying to:', {
+      rootMessageId,
+      rootMessageIdType: typeof rootMessageId,
+      rootMessage: {
+        _id: rootMessage._id,
+        threadId: rootMessage.threadId,
+        parentMessageId: rootMessage.parentMessageId
+      }
+    });
+    
+    setIsPostingReply(true);
+    try {
+      await sendThreadedGroupMessage({
+        text: forumReplyBody.trim(),
+        files: forumReplyFiles,
+        parentMessageId: rootMessageId
+      });
+      setForumReplyBody("");
+      setForumReplyFiles([]);
+    } catch (err) {
+      console.error('Error posting forum reply:', err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Reply Failed',
+        message: err.response?.data?.error || "Unable to submit your reply."
+      });
+    } finally {
+      setIsPostingReply(false);
     }
   };
 
@@ -1357,25 +2188,6 @@ export default function Admin_Chats() {
     
     return bTime - aTime;
   });
-
-  const searchResults = searchTerm.trim() === '' ? [] : [
-    // First show existing chats/groups that match (active conversations)
-    ...unifiedChats.filter(chat => {
-      if (chat.type === 'individual') {
-        return (
-          (chat.firstname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (chat.lastname || '').toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      } else {
-        return (chat.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      }
-    }),
-    // Then show backend user results not already in recent chats
-    ...searchedUsers
-      .filter(user => user._id !== currentUserId)
-      .filter(user => !recentChats.some(chat => chat._id === user._id))
-      .map(user => ({ ...user, type: 'new_user', isNewUser: true }))
-  ];
 
   // Loading screen
   if (isLoading) {
@@ -1679,17 +2491,37 @@ export default function Admin_Chats() {
                   </div>
                 </div>
 
+                {isForumChat ? (
+                  <>
+                    <div className="flex-1 flex items-center justify-center text-center px-6">
+                      <div className="max-w-md space-y-3">
+                        <h4 className="text-xl font-semibold text-gray-900">SJDEF Forum</h4>
+                        <p className="text-sm text-gray-600">
+                          This group uses a threaded forum experience so everyone can post topics and reply in organized discussions.
+                        </p>
+                        <button
+                          onClick={() => setShowForumModal(true)}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Open Forum
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bg-white border-t p-4 text-center">
+                      <p className="text-sm text-gray-500 mb-2">Need to create a topic or reply? Launch the forum workspace.</p>
+                      <button
+                        onClick={() => setShowForumModal(true)}
+                        className="inline-flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        <span className="material-icons text-base">forum</span>
+                        Open Forum Modal
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
                 <div className="flex-1 overflow-y-auto mb-4 space-y-2 pr-1">
-                  {(() => {
-                    const chatMessages = selectedChat.isGroup ? groupMessages[selectedChat._id] || [] : messages[selectedChat._id] || [];
-                    console.log('Rendering messages for chat:', selectedChat._id, 'Message count:', chatMessages.length);
-                    chatMessages.forEach((msg, idx) => {
-                      if (msg.fileUrl) {
-                        console.log(`Message ${idx} has file:`, { fileUrl: msg.fileUrl, fileName: msg.fileName, _id: msg._id });
-                      }
-                    });
-                    return chatMessages;
-                  })().map((msg, index, arr) => {
+                      {renderedMessages.map((msg, index, arr) => {
                     const sender = users.find(u => u._id === msg.senderId);
                     const prevMsg = arr[index - 1];
                     const showHeader =
@@ -1697,7 +2529,7 @@ export default function Admin_Chats() {
                       msg.senderId !== prevMsg?.senderId ||
                       Math.abs(new Date(msg.createdAt || msg.updatedAt) - new Date(prevMsg?.createdAt || prevMsg?.updatedAt)) > 5 * 60 * 1000;
                     return (
-                      <div key={msg._id} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
+                          <div key={msg._id || `${index}-${msg.createdAt}`} className={`flex ${msg.senderId !== currentUserId ? "justify-start" : "justify-end"}`}>
                         <div className={`max-w-xs lg:max-w-md ${msg.senderId !== currentUserId ? "order-1" : "order-2"}`}>
                           {showHeader && msg.senderId !== currentUserId && (
                             <div className="text-xs text-gray-500 mb-1">
@@ -1706,165 +2538,7 @@ export default function Admin_Chats() {
                           )}
                           <div className={`rounded-lg px-4 py-2 ${msg.senderId !== currentUserId ? "bg-gray-200 text-gray-800" : "bg-blue-500 text-white"}`}>
                             {msg.message && <p className="break-words">{msg.message}</p>}
-                            {(() => {
-                              // Debug: Log file info
-                              if (msg.fileUrl) {
-                                console.log('Rendering file for message:', {
-                                  messageId: msg._id,
-                                  fileUrl: msg.fileUrl,
-                                  fileName: msg.fileName,
-                                  hasFileUrl: !!msg.fileUrl,
-                                  hasFileName: !!msg.fileName
-                                });
-                              }
-                              return null;
-                            })()}
-                            {msg.fileUrl && (
-                              <div className="mt-2">
-                                {(() => {
-                                  // Check if fileUrl is already a full URL (Cloudinary) or relative path
-                                  const isFullUrl = msg.fileUrl.startsWith('http://') || msg.fileUrl.startsWith('https://');
-                                  const fileUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
-                                  
-                                  // Use stored fileName if available, otherwise try to extract from URL
-                                  let fileName = msg.fileName;
-                                  if (!fileName) {
-                                    // Try to extract filename from URL
-                                    const urlParts = msg.fileUrl.split('/');
-                                    const lastPart = urlParts[urlParts.length - 1].split('?')[0];
-                                    
-                                    // For Cloudinary raw files, we might need to guess the extension
-                                    // Check if it's a raw file (no extension in URL)
-                                    if (msg.fileUrl.includes('/raw/upload/')) {
-                                      // For raw files without extension, use a generic name
-                                      fileName = `attachment_${lastPart}`;
-                                    } else {
-                                      // Try to get extension from URL or use last part
-                                      fileName = lastPart;
-                                    }
-                                  }
-                                  const fileExtension = fileName.split('.').pop().toLowerCase();
-                                  const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileName);
-                                  const isExcel = /\.(xlsx|xls)$/i.test(fileName);
-                                  const isPDF = /\.(pdf)$/i.test(fileName);
-                                  const isWord = /\.(doc|docx)$/i.test(fileName);
-                                  const isPowerPoint = /\.(ppt|pptx)$/i.test(fileName);
-                                  
-                                  // Handle file download with proper filename
-                                  const handleFileDownload = async (e) => {
-                                    e.preventDefault();
-                                    try {
-                                      console.log('Downloading file:', { fileUrl, fileName });
-                                      
-                                      // For Cloudinary raw files, we need to fetch as arrayBuffer to preserve binary data
-                                      const isCloudinaryRaw = fileUrl.includes('res.cloudinary.com') && fileUrl.includes('/raw/upload/');
-                                      
-                                      let downloadUrl = fileUrl;
-                                      if (fileUrl.includes('res.cloudinary.com')) {
-                                        // Check if URL already has query parameters
-                                        const separator = fileUrl.includes('?') ? '&' : '?';
-                                        // Add fl_attachment with filename to force proper download
-                                        downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
-                                      }
-                                      
-                                      // Fetch the file
-                                      const response = await fetch(downloadUrl, {
-                                        method: 'GET',
-                                        mode: 'cors',
-                                      });
-                                      
-                                      if (!response.ok) {
-                                        throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
-                                      }
-                                      
-                                      let blob;
-                                      if (isCloudinaryRaw) {
-                                        // For raw files, fetch as arrayBuffer to preserve binary integrity
-                                        const arrayBuffer = await response.arrayBuffer();
-                                        // Determine MIME type from file extension or response header
-                                        let mimeType = response.headers.get('content-type') || 'application/octet-stream';
-                                        
-                                        // Override with more specific MIME type if we have file extension
-                                        if (fileName.endsWith('.xlsx')) {
-                                          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                                        } else if (fileName.endsWith('.xls')) {
-                                          mimeType = 'application/vnd.ms-excel';
-                                        } else if (fileName.endsWith('.pdf')) {
-                                          mimeType = 'application/pdf';
-                                        } else if (fileName.endsWith('.docx')) {
-                                          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                                        } else if (fileName.endsWith('.doc')) {
-                                          mimeType = 'application/msword';
-                                        }
-                                        
-                                        blob = new Blob([arrayBuffer], { type: mimeType });
-                                        console.log('Raw file blob created:', { size: blob.size, type: blob.type, originalType: response.headers.get('content-type'), fileName });
-                                      } else {
-                                        blob = await response.blob();
-                                        console.log('File blob created:', { size: blob.size, type: blob.type });
-                                      }
-                                      
-                                      // Create download link with proper filename
-                                      const blobUrl = window.URL.createObjectURL(blob);
-                                      const link = document.createElement('a');
-                                      link.href = blobUrl;
-                                      link.download = fileName;
-                                      link.style.display = 'none';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      setTimeout(() => {
-                                        document.body.removeChild(link);
-                                        window.URL.revokeObjectURL(blobUrl);
-                                      }, 100);
-                                    } catch (error) {
-                                      console.error('Error downloading file:', error);
-                                      // Fallback: try direct download with Cloudinary attachment parameter
-                                      if (fileUrl.includes('res.cloudinary.com')) {
-                                        const separator = fileUrl.includes('?') ? '&' : '?';
-                                        const downloadUrl = `${fileUrl}${separator}fl_attachment:${encodeURIComponent(fileName)}`;
-                                        window.open(downloadUrl, '_blank');
-                                      } else {
-                                        window.open(fileUrl, '_blank');
-                                      }
-                                    }
-                                  };
-                                  
-                                  return isImage ? (
-                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleFileDownload}>
-                                      <img
-                                        src={fileUrl}
-                                        alt="Attachment preview"
-                                        className="rounded-md max-h-56 max-w-full object-contain border border-white/30"
-                                        loading="lazy"
-                                      />
-                                    </a>
-                                  ) : (
-                                    <a
-                                      href={fileUrl}
-                                      onClick={handleFileDownload}
-                                      className={`${msg.senderId !== currentUserId ? "text-blue-700" : "text-blue-100"} underline decoration-current/40 hover:decoration-current flex items-center gap-2 cursor-pointer`}
-                                    >
-                                      {isExcel && "📊"}
-                                      {isPDF && "📄"}
-                                      {isWord && "📝"}
-                                      {isPowerPoint && "📊"}
-                                      {!isExcel && !isPDF && !isWord && !isPowerPoint && "📎"}
-                                      <span>
-                                        {isExcel ? "Excel File" : 
-                                         isPDF ? "PDF Document" :
-                                         isWord ? "Word Document" :
-                                         isPowerPoint ? "PowerPoint" :
-                                         "Attachment"}
-                                      </span>
-                                      <span className="text-xs opacity-75">
-                                        ({msg.fileName ? fileName : (fileName.startsWith('attachment_') ? 'File' : fileName)})
-                                      </span>
-                                    </a>
-                                  );
-                                })()
-                                }
-                              </div>
-                            )}
+                                {renderAttachmentPreview(msg, msg.senderId === currentUserId)}
                             <div className={`text-xs mt-1 ${msg.senderId !== currentUserId ? "text-gray-500" : "text-blue-100"}`}>
                               {(() => {
                                 const ts = msg.createdAt || msg.updatedAt;
@@ -1937,6 +2611,8 @@ export default function Admin_Chats() {
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center">
@@ -2103,6 +2779,35 @@ export default function Admin_Chats() {
             </div>
           </div>
         )}
+
+        <ForumModal
+          isOpen={showForumModal && isForumChat}
+          onClose={() => setShowForumModal(false)}
+          selectedChat={selectedChat}
+          apiBase={API_BASE}
+          forumThreads={forumThreads}
+          activeForumThreadId={activeForumThreadId}
+          setActiveForumThreadId={setActiveForumThreadId}
+          forumPostTitle={forumPostTitle}
+          setForumPostTitle={setForumPostTitle}
+          forumPostBody={forumPostBody}
+          setForumPostBody={setForumPostBody}
+          forumReplyBody={forumReplyBody}
+          setForumReplyBody={setForumReplyBody}
+          forumPostFiles={forumPostFiles}
+          forumReplyFiles={forumReplyFiles}
+          removeForumFile={removeForumFile}
+          handleForumFileSelect={handleForumFileSelect}
+          handleCreateForumPost={handleCreateForumPost}
+          handleReplyToThread={handleReplyToThread}
+          isPostingThread={isPostingThread}
+          isPostingReply={isPostingReply}
+          currentUserId={currentUserId}
+          getSenderDisplayName={getSenderDisplayName}
+          getSenderAvatar={getSenderAvatar}
+          renderAttachmentPreview={renderAttachmentPreview}
+          formatForumTimestamp={formatForumTimestamp}
+        />
 
         {/* Replace the dropdown with a centered modal for group members */}
         {showMembersDropdown && selectedChat.isGroup && (

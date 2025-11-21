@@ -718,6 +718,9 @@ export default function Principal_Chats() {
             senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
             senderLastname: parsedUser ? parsedUser.lastname : "User",
             senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+          threadId: textMessage.threadId || null,
+          parentMessageId: textMessage.parentMessageId || null,
+          title: textMessage.title || null,
           });
 
           setGroupMessages((prev) => ({
@@ -758,6 +761,9 @@ export default function Principal_Chats() {
             senderFirstname: parsedUser ? parsedUser.firstname : "Unknown",
             senderLastname: parsedUser ? parsedUser.lastname : "User",
             senderProfilePic: parsedUser ? parsedUser.profilePic : null,
+            threadId: fileMessage.threadId || null,
+            parentMessageId: fileMessage.parentMessageId || null,
+            title: fileMessage.title || null,
           });
 
           setGroupMessages((prev) => ({
