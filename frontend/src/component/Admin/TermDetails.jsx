@@ -5261,14 +5261,30 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     for (let i = 0; i < assignmentsToValidate.length; i++) {
       const assignment = assignmentsToValidate[i];
       console.log(`Validating assignment ${i + 1}:`, assignment);
-      // Handle new format with separate first_name and last_name
+      // Handle new format with separate first_name and last_name, or combined student_name
       const studentSchoolIDInput = assignment['student_no']?.trim() || assignment['Student School ID']?.trim() || '';
-      const firstNameInput = assignment['first_name']?.trim() || '';
-      const lastNameInput = assignment['last_name']?.trim() || '';
+      
+      // Handle name parsing - support both separate and combined formats
+      let firstNameInput = assignment['first_name']?.trim() || '';
+      let lastNameInput = assignment['last_name']?.trim() || '';
+      
+      // If we have combined student_name but no separate names, split it
+      if ((!firstNameInput || !lastNameInput) && assignment['student_name']) {
+        const studentName = String(assignment['student_name']).trim();
+        const nameParts = studentName.split(/\s+/);
+        if (nameParts.length >= 2) {
+          lastNameInput = lastNameInput || nameParts[nameParts.length - 1];
+          firstNameInput = firstNameInput || nameParts.slice(0, -1).join(' ');
+        } else if (nameParts.length === 1 && !lastNameInput) {
+          lastNameInput = nameParts[0];
+        }
+      }
+      
       const enrollmentNoInput = assignment['enrollment_no']?.trim() || '';
       const enrollmentDateInput = assignment['date']?.trim() || '';
       const gradeLevel = assignment['grade']?.trim() || assignment['Grade Level']?.trim() || '';
-      const trackName = assignment['Track Name']?.trim() || ''; // Track name not in new format, will be derived from strand
+      // Get track name from Excel - support both 'track' and 'Track Name' formats
+      const trackName = assignment['track']?.trim() || assignment['Track Name']?.trim() || '';
       const strandName = assignment['strand']?.trim() || assignment['Strand Name']?.trim() || '';
       const sectionName = assignment['section']?.trim() || assignment['Section Name']?.trim() || '';
       // Derive track name from strand if not provided (for new San Juan format)
@@ -5420,7 +5436,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       }
 
       // Find the actual header row
-      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'strand', 'section', 'grade'];
+      const expectedHeaders = ['enrollment_no', 'date', 'student_no', 'student_school_email', 'last_name', 'first_name', 'track', 'strand', 'section', 'grade'];
       const { headerRowIndex, headers } = findDataHeaders(rawData, expectedHeaders);
       
       // Get data rows starting after the header row
@@ -5436,16 +5452,21 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       console.log("Actual Headers from Excel:", actualHeaders);
 
       // Define expected headers and create a mapping for flexible matching (San Juan format)
-      // Required headers
+      // Required headers - support both separate first_name/last_name and combined student_name
       const requiredHeadersMap = {
         'enrollment_no': '',
         'date': '',
         'student_no': '',
-        'last_name': '',
-        'first_name': '',
+        'track': '',
         'strand': '',
         'section': '',
         'grade': '',
+      };
+      // Name headers - can be either separate or combined
+      const nameHeadersMap = {
+        'last_name': '',
+        'first_name': '',
+        'student_name': '', // Combined name field (alternative to first_name + last_name)
       };
       // Optional headers
       const optionalHeadersMap = {
@@ -5453,7 +5474,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       };
       const headerMapping = {};
 
-      // Check required headers
+      // Check required headers (excluding name fields for now)
       for (const expectedKey of Object.keys(requiredHeadersMap)) {
         const foundHeader = actualHeaders.find(actual => 
           actual.toLowerCase() === expectedKey.toLowerCase() ||
@@ -5466,6 +5487,32 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           setStudentExcelError(`Missing required header: "${expectedKey}". Please ensure your Excel file includes this column.`);
           return;
         }
+      }
+      
+      // Check name headers - prefer separate first_name/last_name, but also accept combined student_name
+      let hasSeparateNames = false;
+      let hasCombinedName = false;
+      
+      for (const expectedKey of Object.keys(nameHeadersMap)) {
+        const foundHeader = actualHeaders.find(actual => 
+          actual.toLowerCase() === expectedKey.toLowerCase() ||
+          actual.toLowerCase().includes(expectedKey.toLowerCase()) ||
+          expectedKey.toLowerCase().includes(actual.toLowerCase())
+        );
+        if (foundHeader) {
+          headerMapping[expectedKey] = foundHeader;
+          if (expectedKey === 'first_name' || expectedKey === 'last_name') {
+            hasSeparateNames = true;
+          } else if (expectedKey === 'student_name') {
+            hasCombinedName = true;
+          }
+        }
+      }
+      
+      // If we don't have either separate names or combined name, it's an error
+      if (!hasSeparateNames && !hasCombinedName) {
+        setStudentExcelError('Missing required name field. Please include either separate "first_name" and "last_name" columns, or a combined "Student Name" column.');
+        return;
       }
       
       // Check optional headers (email)
@@ -5495,7 +5542,22 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
           const actualHeader = headerMapping[expectedKey];
           const columnIndex = actualHeaders.indexOf(actualHeader); // Find the column index of the matched header
           if (columnIndex !== -1 && row[columnIndex] !== undefined && row[columnIndex] !== null) {
-            obj[expectedKey] = String(row[columnIndex]).trim();
+            const value = String(row[columnIndex]).trim();
+            obj[expectedKey] = value;
+            
+            // If we have a combined student_name, split it into first_name and last_name
+            if (expectedKey === 'student_name' && value) {
+              const nameParts = value.split(/\s+/);
+              if (nameParts.length >= 2) {
+                // Last name is the last part, first name is everything else
+                obj['last_name'] = nameParts[nameParts.length - 1];
+                obj['first_name'] = nameParts.slice(0, -1).join(' ');
+              } else if (nameParts.length === 1) {
+                // Only one name part - treat as last name
+                obj['last_name'] = nameParts[0];
+                obj['first_name'] = '';
+              }
+            }
           } else {
             obj[expectedKey] = ''; // Assign empty string if data is missing for a required column
           }
@@ -5578,9 +5640,28 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify((() => {
+            // Get track name from Excel - support both 'track' and 'Track Name' formats
+            const trackNameFromExcel = assignment['track']?.trim() || assignment['Track Name']?.trim() || '';
+            // Derive track name from strand if not provided (for backward compatibility)
+            let finalTrackName = trackNameFromExcel;
+            if (!finalTrackName && assignment['strand']) {
+              const strandNameForTrack = String(assignment['strand']).trim();
+              if (strandNameForTrack === 'STEM' || strandNameForTrack === 'ABM' || strandNameForTrack === 'GAS' || strandNameForTrack === 'HUMSS' ||
+                  strandNameForTrack === 'Accountancy, Business and Management (ABM)' || 
+                  strandNameForTrack === 'General Academic Strand (GAS)' || 
+                  strandNameForTrack === 'Humanities and Social Sciences (HUMSS)' || 
+                  strandNameForTrack === 'Science, Technology, Engineering, and Mathematics (STEM)') {
+                finalTrackName = 'Academic Track';
+              } else if (strandNameForTrack === 'Housekeeping' || strandNameForTrack === 'Cookery' || 
+                        strandNameForTrack === 'Food and Beverage Services' || strandNameForTrack === 'Bread and Pastry Production' ||
+                        strandNameForTrack === 'ICT') {
+                finalTrackName = 'TVL Track';
+              }
+            }
+            
             const basePayload = {
               gradeLevel: assignment['grade'] || assignment['Grade Level'],
-              trackName: assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track'),
+              trackName: finalTrackName,
               strandName: assignment['strand'] || assignment['Strand Name'],
               sectionName: assignment['section'] || assignment['Section Name'],
               termId: termDetails._id,
@@ -10091,13 +10172,46 @@ Validation issues (${skippedCount} items):
                               const isValid = studentValidationStatus[index]?.valid;
                               const message = studentValidationStatus[index]?.message;
                               
-                              // Extract data from new format
+                              // Extract data from new format - support both separate and combined name formats
                               const studentSchoolID = assignment['student_no'] || assignment['Student School ID'] || '';
-                              const firstName = assignment['first_name'] || '';
-                              const lastName = assignment['last_name'] || '';
-                              const studentName = `${firstName} ${lastName}`.trim();
+                              
+                              // Handle name - support both separate first_name/last_name and combined student_name
+                              let firstName = assignment['first_name'] || '';
+                              let lastName = assignment['last_name'] || '';
+                              
+                              // If we have combined student_name but no separate names, split it
+                              if ((!firstName || !lastName) && assignment['student_name']) {
+                                const studentNameFull = String(assignment['student_name']).trim();
+                                const nameParts = studentNameFull.split(/\s+/);
+                                if (nameParts.length >= 2) {
+                                  lastName = lastName || nameParts[nameParts.length - 1];
+                                  firstName = firstName || nameParts.slice(0, -1).join(' ');
+                                } else if (nameParts.length === 1) {
+                                  lastName = lastName || nameParts[0];
+                                }
+                              }
+                              
+                              const studentName = `${firstName} ${lastName}`.trim() || assignment['student_name'] || '';
                               const gradeLevel = assignment['grade'] || assignment['Grade Level'] || '';
-                              const trackName = assignment['Track Name'] || (assignment['strand'] === 'STEM' ? 'Academic Track' : 'TVL Track');
+                              
+                              // Get track name from Excel - support both 'track' and 'Track Name' formats
+                              let trackName = assignment['track']?.trim() || assignment['Track Name']?.trim() || '';
+                              // Derive track name from strand if not provided (for backward compatibility)
+                              if (!trackName && assignment['strand']) {
+                                const strandNameForTrack = String(assignment['strand']).trim();
+                                if (strandNameForTrack === 'STEM' || strandNameForTrack === 'ABM' || strandNameForTrack === 'GAS' || strandNameForTrack === 'HUMSS' ||
+                                    strandNameForTrack === 'Accountancy, Business and Management (ABM)' || 
+                                    strandNameForTrack === 'General Academic Strand (GAS)' || 
+                                    strandNameForTrack === 'Humanities and Social Sciences (HUMSS)' || 
+                                    strandNameForTrack === 'Science, Technology, Engineering, and Mathematics (STEM)') {
+                                  trackName = 'Academic Track';
+                                } else if (strandNameForTrack === 'Housekeeping' || strandNameForTrack === 'Cookery' || 
+                                          strandNameForTrack === 'Food and Beverage Services' || strandNameForTrack === 'Bread and Pastry Production' ||
+                                          strandNameForTrack === 'ICT') {
+                                  trackName = 'TVL Track';
+                                }
+                              }
+                              
                               const strandName = assignment['strand'] || assignment['Strand Name'] || '';
                               const sectionName = assignment['section'] || assignment['Section Name'] || '';
                               
