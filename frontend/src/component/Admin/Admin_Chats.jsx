@@ -143,6 +143,7 @@ export default function Admin_Chats() {
     });
   };
 
+  const previousChatRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const { socket: ctxSocket, isConnected } = useSocket();
@@ -156,13 +157,18 @@ export default function Admin_Chats() {
 
   const API_URL = (import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com").replace(/\/$/, "");
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
+  const forumGroup = useMemo(
+    () => userGroups.find(group => (group?.name || "").toLowerCase() === "sjdef forum"),
+    [userGroups]
+  );
   const isForumChat = selectedChat?.isGroup && (selectedChat?.name || "").toLowerCase() === "sjdef forum";
 
-  useEffect(() => {
-    if (!isForumChat) {
-      setShowForumModal(false);
-    }
-  }, [isForumChat]);
+useEffect(() => {
+  if (!isForumChat) {
+    setShowForumModal(false);
+    previousChatRef.current = null;
+  }
+}, [isForumChat]);
 
   const storedUser = localStorage.getItem("user");
   const parsedCurrentUser = useMemo(() => {
@@ -2159,7 +2165,11 @@ export default function Admin_Chats() {
 
   // Merge recentChats and groups with messages (actual conversations)
   // Show all groups (except hidden) immediately for faster perceived load
-  const groupsWithMessages = userGroups.filter(group => !hiddenGroupIds.includes(group._id));
+  const groupsWithMessages = userGroups.filter(
+    group =>
+      !hiddenGroupIds.includes(group._id) &&
+      (group?.name || "").toLowerCase() !== "sjdef forum"
+  );
   
   const unifiedChats = [
     ...recentChats.map(chat => ({ ...chat, type: 'individual' })),
@@ -2205,6 +2215,30 @@ export default function Admin_Chats() {
     );
   }
 
+  const handleOpenForum = () => {
+    if (!forumGroup) {
+      setValidationModal({
+        isOpen: true,
+        type: "warning",
+        title: "Forum Not Available",
+        message: "The SJDEF Forum group is not set up yet."
+      });
+      return;
+    }
+    previousChatRef.current = selectedChat && selectedChat._id !== forumGroup._id ? selectedChat : null;
+    setSelectedChat({ ...forumGroup, isGroup: true });
+    clearHighlight(forumGroup._id);
+    setShowForumModal(true);
+  };
+
+  const handleCloseForumModal = () => {
+    setShowForumModal(false);
+    if (previousChatRef.current) {
+      setSelectedChat(previousChatRef.current);
+      previousChatRef.current = null;
+    }
+  };
+
   // Unified chat interface with tabs, left/right panels, and modals
   return (
     <div className="flex min-h-screen h-screen max-h-screen">
@@ -2233,98 +2267,120 @@ export default function Admin_Chats() {
           {/* LEFT PANEL */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
             {/* Header and Plus Icon */}
-            <div className="flex items-center justify-between mb-4 relative">
-              <input
-                type="text"
-                placeholder="Search users or groups..."
-                className="flex-1 p-2 border rounded-lg text-sm"
-                value={searchTerm}
-                onFocus={() => setShowSearchDropdown(true)}
-                onChange={(e) => { setSearchTerm(e.target.value); setShowSearchDropdown(true); }}
-              />
-              <div className="relative ml-2">
+            <div className="mb-4">
+              <div className="flex border-b border-gray-300 mb-3">
                 <button
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
-                  onClick={() => setShowGroupMenu((prev) => !prev)}
-                  title="Group Actions"
+                  className="px-4 py-2 text-sm font-semibold border-b-2 border-blue-900 text-blue-900"
+                  type="button"
+                  aria-current="true"
                 >
-                  <span className="text-2xl leading-none">+</span>
+                  Chats
                 </button>
-                {showGroupMenu && (
-                  <div className="absolute right-0 mt-2 w-36 bg-white border rounded-lg shadow-lg z-10">
-                    <button
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      onClick={() => { setShowCreateGroup(true); setShowGroupMenu(false); }}
-                    >
-                      Create Group
-                    </button>
-                    <button
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      onClick={() => {
-                        // Quick create SJDEF Forum
-                        setGroupName("SJDEF Forum");
-                        setShowCreateGroup(true);
-                        setShowGroupMenu(false);
-                      }}
-                    >
-                      Create SJDEF Forum
-                    </button>
-                    <button
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      onClick={() => { setShowJoinGroup(true); setShowGroupMenu(false); }}
-                    >
-                      Join Group
-                    </button>
-                  </div>
-                )}
+                <button
+                  className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                    forumGroup
+                      ? "border-transparent text-gray-500 hover:text-blue-900 hover:border-blue-300"
+                      : "border-transparent text-gray-400 cursor-not-allowed"
+                  }`}
+                  type="button"
+                  onClick={forumGroup ? handleOpenForum : undefined}
+                  disabled={!forumGroup}
+                  title={forumGroup ? "Open SJDEF Forum" : "Forum group not available yet"}
+                >
+                  SJDEF Forum
+                </button>
               </div>
-              {showSearchDropdown && searchTerm.trim() !== '' && (
-                <div className="absolute left-0 top-10 w-[calc(100%-56px)] bg-white border rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
-                  {isSearching && (
-                    <div className="p-3 text-sm text-gray-500">Searching...</div>
-                  )}
-                  {!isSearching && (
-                    <>
-                      {/* Users results */}
-                      {searchedUsers.filter(u => u._id !== currentUserId).length > 0 ? (
-                        searchedUsers.filter(u => u._id !== currentUserId).map(user => (
-                          <div
-                            key={user._id}
-                            className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => { bumpChatToTop(user); setSelectedChat(user); setSearchTerm(''); setShowSearchDropdown(false); }}
-                          >
-                            <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-6 h-6 rounded-full object-cover border" onError={e => { e.target.onerror=null; e.target.src = defaultAvatar; }} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm truncate">{user.lastname}, {user.firstname}</div>
-                              <div className="text-[11px] text-gray-500 truncate">Click to start new chat</div>
-                            </div>
-                            {/* Removed "New" badge for cleaner dropdown */}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
+              <div className="flex items-center justify-between relative gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-[220px]">
+                  <input
+                    type="text"
+                    placeholder="Search users or groups..."
+                    className="w-full p-2 border rounded-lg text-sm"
+                    value={searchTerm}
+                    onFocus={() => setShowSearchDropdown(true)}
+                    onChange={(e) => { setSearchTerm(e.target.value); setShowSearchDropdown(true); }}
+                  />
+                  {showSearchDropdown && searchTerm.trim() !== '' && (
+                    <div className="absolute left-0 top-11 w-full bg-white border rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
+                      {isSearching && (
+                        <div className="p-3 text-sm text-gray-500">Searching...</div>
                       )}
-                      <div className="h-px bg-gray-200 my-1" />
-                      {/* Group matches by name */}
-                      {userGroups.filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
-                        userGroups
-                          .filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase()))
-                          .map(g => (
-                            <div key={g._id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer" onClick={() => { setSelectedChat({ ...g, isGroup: true }); setSearchTerm(''); setShowSearchDropdown(false); }}>
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">G</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm truncate">{g.name}</div>
-                                <div className="text-[11px] text-gray-500">{g.participants?.length || 0} participants</div>
+                      {!isSearching && (
+                        <>
+                          {searchedUsers.filter(u => u._id !== currentUserId).length > 0 ? (
+                            searchedUsers.filter(u => u._id !== currentUserId).map(user => (
+                              <div
+                                key={user._id}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                onClick={() => { bumpChatToTop(user); setSelectedChat(user); setSearchTerm(''); setShowSearchDropdown(false); }}
+                              >
+                                <img src={getProfileImageUrl(user.profilePic, API_BASE, defaultAvatar)} alt="Profile" className="w-6 h-6 rounded-full object-cover border" onError={e => { e.target.onerror=null; e.target.src = defaultAvatar; }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm truncate">{user.lastname}, {user.firstname}</div>
+                                  <div className="text-[11px] text-gray-500 truncate">Click to start new chat</div>
+                                </div>
                               </div>
-                            </div>
-                          ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-gray-500">No groups found</div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-gray-500">No users found</div>
+                          )}
+                          <div className="h-px bg-gray-200 my-1" />
+                          {userGroups.filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase())).length > 0 ? (
+                            userGroups
+                              .filter(g => (g.name || '').toLowerCase().includes(searchTerm.toLowerCase()))
+                              .map(g => (
+                                <div key={g._id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer" onClick={() => { setSelectedChat({ ...g, isGroup: true }); setSearchTerm(''); setShowSearchDropdown(false); }}>
+                                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">G</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm truncate">{g.name}</div>
+                                    <div className="text-[11px] text-gray-500">{g.participants?.length || 0} participants</div>
+                                  </div>
+                                </div>
+                              ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-gray-500">No groups found</div>
+                          )}
+                        </>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
-              )}
+                <div className="relative ml-2">
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
+                    onClick={() => setShowGroupMenu((prev) => !prev)}
+                    title="Group Actions"
+                  >
+                    <span className="text-2xl leading-none">+</span>
+                  </button>
+                  {showGroupMenu && (
+                    <div className="absolute right-0 mt-2 w-36 bg-white border rounded-lg shadow-lg z-10">
+                      <button
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => { setShowCreateGroup(true); setShowGroupMenu(false); }}
+                      >
+                        Create Group
+                      </button>
+                      <button
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => {
+                          setGroupName("SJDEF Forum");
+                          setShowCreateGroup(true);
+                          setShowGroupMenu(false);
+                        }}
+                      >
+                        Create SJDEF Forum
+                      </button>
+                      <button
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => { setShowJoinGroup(true); setShowGroupMenu(false); }}
+                      >
+                        Join Group
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* New Chat Button */}
@@ -2781,8 +2837,8 @@ export default function Admin_Chats() {
         )}
 
         <ForumModal
-          isOpen={showForumModal && isForumChat}
-          onClose={() => setShowForumModal(false)}
+          isOpen={showForumModal && !!forumGroup}
+          onClose={handleCloseForumModal}
           selectedChat={selectedChat}
           apiBase={API_BASE}
           forumThreads={forumThreads}
