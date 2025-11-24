@@ -319,6 +319,8 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     message: '',
     type: 'info',
     confirmText: 'OK',
+    cancelText: 'Cancel',
+    showCancel: false,
     onConfirm: null
   });
   const [validationResults, setValidationResults] = useState({
@@ -363,7 +365,29 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       message,
       type,
       confirmText: options.confirmText || 'OK',
+      cancelText: options.cancelText || 'Cancel',
+      showCancel: Boolean(options.showCancel),
       onConfirm: options.onConfirm || null
+    });
+  };
+
+  const showConfirmationModal = ({
+    title,
+    message,
+    type = 'warning',
+    confirmText = 'Yes',
+    cancelText = 'No',
+    onConfirm
+  }) => {
+    setFeedbackModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      confirmText,
+      cancelText,
+      showCancel: true,
+      onConfirm: onConfirm || null
     });
   };
 
@@ -371,7 +395,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
     setFeedbackModal(prev => ({
       ...prev,
       isOpen: false,
+      showCancel: false,
       onConfirm: null,
+      cancelText: 'Cancel',
       confirmText: 'OK'
     }));
   };
@@ -733,7 +759,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    if (window.confirm("Save changes to this track?")) {
+    const executeTrackUpdate = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/tracks/${editingTrack._id}`, {
           method: 'PATCH',
@@ -791,43 +817,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         showErrorValidationModal('Error Updating Track', 'An unexpected error occurred while updating the track.', 'error');
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Save Track Changes',
+      message: 'Save changes to this track?',
+      confirmText: 'Save',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeTrackUpdate
+    });
   };
 
   const handleDeleteTrack = async (track) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/tracks/${track._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this track will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.strands.length} Strands\n` +
-            `• ${dependencies.sections.length} Sections\n` +
-            `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the track "${track.trackName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
+
+    const executeTrackDeletion = async () => {
+      try {
         const deleteRes = await fetch(`${API_BASE}/api/tracks/${track._id}?confirmCascade=true`, {
           method: 'DELETE'
         });
@@ -865,6 +871,50 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Track', data.message || 'Failed to delete track', 'error');
+        }
+      } catch (err) {
+        showErrorValidationModal('Error Deleting Track', 'An unexpected error occurred while deleting the track.', 'error');
+        console.error('Error in executeTrackDeletion:', err);
+      }
+    };
+    
+    try {
+      // First, check dependencies
+      const dependenciesRes = await fetch(`${API_BASE}/api/tracks/${track._id}/dependencies`);
+      
+      if (dependenciesRes.ok) {
+        const dependencies = await dependenciesRes.json();
+        const confirmationBase = {
+          title: 'Delete Track',
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          type: 'warning',
+          onConfirm: executeTrackDeletion
+        };
+        
+        if (dependencies.totalConnections > 0) {
+          // Show detailed dependency modal
+          const message = `⚠️ WARNING: Deleting this track will also delete ALL connected data!\n\n` +
+            `📊 CONNECTED DATA:\n` +
+            `• ${dependencies.strands.length} Strands\n` +
+            `• ${dependencies.sections.length} Sections\n` +
+            `• ${dependencies.subjects.length} Subjects\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
+            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
+            `Total: ${dependencies.totalConnections} connected records\n\n` +
+            `This action CANNOT be undone!\n\n` +
+            `Do you want to proceed?`;
+            
+          showConfirmationModal({
+            ...confirmationBase,
+            message
+          });
+        } else {
+          // No dependencies, simple confirmation
+          showConfirmationModal({
+            ...confirmationBase,
+            message: `Are you sure you want to delete the track "${track.trackName}"?`
+          });
         }
       } else {
         showErrorValidationModal('Error Deleting Track', 'Failed to check track dependencies', 'error');
@@ -990,7 +1040,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    if (window.confirm("Save changes to this strand?")) {
+    const executeStrandUpdate = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/strands/${editingStrand._id}`, {
           method: 'PATCH',
@@ -1049,42 +1099,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         showErrorValidationModal('Error Updating Strand', 'An unexpected error occurred while updating the strand.', 'error');
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Save Strand Changes',
+      message: 'Save changes to this strand?',
+      confirmText: 'Save',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeStrandUpdate
+    });
   };
 
   const handleDeleteStrand = async (strand) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/strands/${strand._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this strand will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.sections.length} Sections\n` +
-            `• ${dependencies.subjects.length} Subjects\n` +
-            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the strand "${strand.strandName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
+
+    const executeStrandDeletion = async () => {
+      try {
         const deleteRes = await fetch(`${API_BASE}/api/strands/${strand._id}?confirmCascade=true`, {
           method: 'DELETE'
         });
@@ -1121,6 +1152,49 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Strand', data.message || 'Failed to delete strand', 'error');
+        }
+      } catch (err) {
+        showErrorValidationModal('Error Deleting Strand', 'An unexpected error occurred while deleting the strand.', 'error');
+        console.error('Error in executeStrandDeletion:', err);
+      }
+    };
+    
+    try {
+      // First, check dependencies
+      const dependenciesRes = await fetch(`${API_BASE}/api/strands/${strand._id}/dependencies`);
+      
+      if (dependenciesRes.ok) {
+        const dependencies = await dependenciesRes.json();
+        const confirmationBase = {
+          title: 'Delete Strand',
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          type: 'warning',
+          onConfirm: executeStrandDeletion
+        };
+        
+        if (dependencies.totalConnections > 0) {
+          // Show detailed dependency modal
+          const message = `⚠️ WARNING: Deleting this strand will also delete ALL connected data!\n\n` +
+            `📊 CONNECTED DATA:\n` +
+            `• ${dependencies.sections.length} Sections\n` +
+            `• ${dependencies.subjects.length} Subjects\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
+            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
+            `Total: ${dependencies.totalConnections} connected records\n\n` +
+            `This action CANNOT be undone!\n\n` +
+            `Do you want to proceed?`;
+            
+          showConfirmationModal({
+            ...confirmationBase,
+            message
+          });
+        } else {
+          // No dependencies, simple confirmation
+          showConfirmationModal({
+            ...confirmationBase,
+            message: `Are you sure you want to delete the strand "${strand.strandName}"?`
+          });
         }
       } else {
         showErrorValidationModal('Error Deleting Strand', 'Failed to check strand dependencies', 'error');
@@ -1268,7 +1342,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    if (window.confirm("Save changes to this section?")) {
+    const executeSectionUpdate = async () => {
       try {
         // Ensure section code is generated if it's empty
         const finalSectionCode = sectionFormData.sectionCode.trim() || generateSectionCode(sectionFormData.sectionName.trim());
@@ -1332,40 +1406,23 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       } catch (err) {
         showErrorValidationModal('Error Updating Section', 'An unexpected error occurred while updating the section.', 'error');
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Save Section Changes',
+      message: 'Save changes to this section?',
+      confirmText: 'Save',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeSectionUpdate
+    });
   };
 
   const handleDeleteSection = async (section) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const dependenciesRes = await fetch(`${API_BASE}/api/sections/${section._id}/dependencies`);
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this section will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the section "${section.sectionName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
+
+    const executeSectionDeletion = async () => {
+      try {
         const deleteRes = await fetch(`${API_BASE}/api/sections/${section._id}?confirmCascade=true`, {
           method: 'DELETE'
         });
@@ -1400,6 +1457,47 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else {
           const data = await deleteRes.json();
           showErrorValidationModal('Error Deleting Section', data.message || 'Failed to delete section', 'error');
+        }
+      } catch (err) {
+        showErrorValidationModal('Error Deleting Section', 'An unexpected error occurred while deleting the section.', 'error');
+        console.error('Error in executeSectionDeletion:', err);
+      }
+    };
+    
+    try {
+      // First, check dependencies
+      const dependenciesRes = await fetch(`${API_BASE}/api/sections/${section._id}/dependencies`);
+      
+      if (dependenciesRes.ok) {
+        const dependencies = await dependenciesRes.json();
+        const confirmationBase = {
+          title: 'Delete Section',
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          type: 'warning',
+          onConfirm: executeSectionDeletion
+        };
+        
+        if (dependencies.totalConnections > 0) {
+          // Show detailed dependency modal
+          const message = `⚠️ WARNING: Deleting this section will also delete ALL connected data!\n\n` +
+            `📊 CONNECTED DATA:\n` +
+            `• ${dependencies.studentAssignments.length} Enrolled Students\n` +
+            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
+            `Total: ${dependencies.totalConnections} connected records\n\n` +
+            `This action CANNOT be undone!\n\n` +
+            `Do you want to proceed?`;
+            
+          showConfirmationModal({
+            ...confirmationBase,
+            message
+          });
+        } else {
+          // No dependencies, simple confirmation
+          showConfirmationModal({
+            ...confirmationBase,
+            message: `Are you sure you want to delete the section "${section.sectionName}"?`
+          });
         }
       } else {
         showErrorValidationModal('Error Deleting Section', 'Failed to check section dependencies', 'error');
@@ -2050,7 +2148,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    if (window.confirm("Save changes to this faculty assignment?")) {
+    const executeFacultyAssignmentUpdate = async () => {
       try {
         const token = localStorage.getItem('token');
 
@@ -2120,11 +2218,20 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         showErrorValidationModal('Error Updating Faculty Assignment', 'An unexpected error occurred while updating the faculty assignment.', 'error');
         console.error("Error in handleUpdateFacultyAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Save Faculty Assignment',
+      message: 'Save changes to this faculty assignment?',
+      confirmText: 'Save',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeFacultyAssignmentUpdate
+    });
   };
 
   const handleDeleteFacultyAssignment = async (assignment) => {
-    if (window.confirm("Are you sure you want to remove this faculty assignment?")) {
+    const executeFacultyDeletion = async () => {
       try {
         const token = localStorage.getItem('token');
 
@@ -2167,11 +2274,20 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         showErrorValidationModal('Error Removing Faculty Assignment', 'An unexpected error occurred while removing the faculty assignment.', 'error');
         console.error("Error in handleDeleteFacultyAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Remove Faculty Assignment',
+      message: 'Are you sure you want to remove this faculty assignment?',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeFacultyDeletion
+    });
   };
 
   const handleUnarchiveFacultyAssignment = async (assignment) => {
-    if (window.confirm("Are you sure you want to unarchive this faculty assignment?")) {
+    const executeFacultyUnarchive = async () => {
       try {
         const token = localStorage.getItem('token');
 
@@ -2214,7 +2330,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setFacultyError('Error unarchiving faculty assignment');
         console.error("Error in handleUnarchiveFacultyAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Unarchive Faculty Assignment',
+      message: 'Are you sure you want to unarchive this faculty assignment?',
+      confirmText: 'Unarchive',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeFacultyUnarchive
+    });
   };
 
   const handleAddStudentAssignment = async (e) => {
@@ -2591,7 +2716,7 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
       return;
     }
 
-    if (window.confirm("Save changes to this student assignment?")) {
+    const executeStudentAssignmentUpdate = async () => {
       try {
         const token = localStorage.getItem('token');
         const studentToAssign = students.find(s => s._id === studentFormData.studentId);
@@ -2714,11 +2839,20 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         showErrorValidationModal('Error Updating Student Assignment', 'An unexpected error occurred while updating the student assignment.', 'error');
         console.error("Error in handleUpdateStudentAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Save Student Assignment',
+      message: 'Save changes to this student assignment?',
+      confirmText: 'Save',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeStudentAssignmentUpdate
+    });
   };
 
   const handleDeleteStudentAssignment = async (assignment) => {
-    if (window.confirm("Are you sure you want to remove this student assignment?")) {
+    const executeStudentDeletion = async () => {
       try {
         const token = localStorage.getItem('token');
 
@@ -2761,11 +2895,20 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         showErrorValidationModal('Error Removing Student Assignment', 'An unexpected error occurred while removing the student assignment.', 'error');
         console.error("Error in handleDeleteStudentAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Remove Student Assignment',
+      message: 'Are you sure you want to remove this student assignment?',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeStudentDeletion
+    });
   };
 
   const handleUnarchiveStudentAssignment = async (assignment) => {
-    if (window.confirm("Are you sure you want to unarchive this student assignment?")) {
+    const executeStudentUnarchive = async () => {
       try {
         const token = localStorage.getItem('token');
 
@@ -2808,7 +2951,16 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         setStudentError('Error unarchiving student assignment');
         console.error("Error in handleUnarchiveStudentAssignment:", err);
       }
-    }
+    };
+
+    showConfirmationModal({
+      title: 'Unarchive Student Assignment',
+      message: 'Are you sure you want to unarchive this student assignment?',
+      confirmText: 'Unarchive',
+      cancelText: 'Cancel',
+      type: 'warning',
+      onConfirm: executeStudentUnarchive
+    });
   };
 
   // Generate comprehensive PDF report with all term and quarter details
@@ -5953,39 +6105,9 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
 
   const handleDeleteSubject = async (subject) => {
     if (termDetails.status === 'archived') return;
-    
-    try {
-      // First, check dependencies
-      const token = localStorage.getItem('token');
-      const dependenciesRes = await fetch(`${API_BASE}/api/subjects/${subject._id}/dependencies`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (dependenciesRes.ok) {
-        const dependencies = await dependenciesRes.json();
-        
-        if (dependencies.totalConnections > 0) {
-          // Show detailed dependency modal
-          const message = `⚠️ WARNING: Deleting this subject will also delete ALL connected data!\n\n` +
-            `📊 CONNECTED DATA:\n` +
-            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
-            `Total: ${dependencies.totalConnections} connected records\n\n` +
-            `This action CANNOT be undone!\n\n` +
-            `Do you want to proceed?`;
-            
-          if (!window.confirm(message)) {
-            return;
-          }
-        } else {
-          // No dependencies, simple confirmation
-          if (!window.confirm(`Are you sure you want to delete the subject "${subject.subjectName}"?`)) {
-            return;
-          }
-        }
-        
-        // Proceed with deletion (with cascade if needed)
+
+    const executeSubjectDeletion = async () => {
+      try {
         const token = localStorage.getItem('token');
         const deleteRes = await fetch(`${API_BASE}/api/subjects/${subject._id}?confirmCascade=true`, {
           method: 'DELETE',
@@ -6023,6 +6145,51 @@ export default function TermDetails({ termData: propTermData, quarterData }) {
         } else {
           const data = await deleteRes.json();
           setSubjectError(data.message || 'Failed to delete subject');
+        }
+      } catch (err) {
+        showErrorValidationModal('Error Deleting Subject', 'An unexpected error occurred while deleting the subject.', 'error');
+        console.error('Error in handleDeleteSubject:', err);
+      }
+    };
+    
+    try {
+      // First, check dependencies
+      const token = localStorage.getItem('token');
+      const dependenciesRes = await fetch(`${API_BASE}/api/subjects/${subject._id}/dependencies`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (dependenciesRes.ok) {
+        const dependencies = await dependenciesRes.json();
+        const confirmationBase = {
+          title: 'Delete Subject',
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          type: 'warning',
+          onConfirm: executeSubjectDeletion
+        };
+        
+        if (dependencies.totalConnections > 0) {
+          // Show detailed dependency modal
+          const message = `⚠️ WARNING: Deleting this subject will also delete ALL connected data!\n\n` +
+            `📊 CONNECTED DATA:\n` +
+            `• ${dependencies.facultyAssignments.length} Faculty Assignments\n\n` +
+            `Total: ${dependencies.totalConnections} connected records\n\n` +
+            `This action CANNOT be undone!\n\n` +
+            `Do you want to proceed?`;
+            
+          showConfirmationModal({
+            ...confirmationBase,
+            message
+          });
+        } else {
+          // No dependencies, simple confirmation
+          showConfirmationModal({
+            ...confirmationBase,
+            message: `Are you sure you want to delete the subject "${subject.subjectName}"?`
+          });
         }
       } else {
         showErrorValidationModal('Error Deleting Subject', 'Failed to check subject dependencies', 'error');
@@ -11074,6 +11241,8 @@ Validation issues (${skippedCount} items):
         type={feedbackModal.type}
         onConfirm={feedbackModal.onConfirm}
         confirmText={feedbackModal.confirmText}
+        showCancel={feedbackModal.showCancel}
+        cancelText={feedbackModal.cancelText}
       />
     </div>
   );
