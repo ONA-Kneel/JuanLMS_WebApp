@@ -1,6 +1,6 @@
 //VPE_Chats.jsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import axios from "axios";
 import { io } from "socket.io-client";
 import uploadfile from "../../assets/uploadfile.png";
@@ -10,6 +10,7 @@ import defaultAvatar from "../../assets/profileicon (1).svg";
 import { useNavigate } from "react-router-dom";
 import ValidationModal from "../ValidationModal";
 import { getProfileImageUrl, getFileUrl } from "../../utils/imageUtils";
+import ForumModal from "../common/ForumModal.jsx";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
 
@@ -57,6 +58,11 @@ export default function VPE_Chats() {
 
   // Group chat states
   const [groups, setGroups] = useState([]);
+  const forumGroup = useMemo(
+    () => groups.find(group => (group?.name || "").toLowerCase() === "sjdef forum"),
+    [groups]
+  );
+  const forumGroupId = forumGroup?._id || null;
   const [groupMessages, setGroupMessages] = useState({});
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
@@ -106,6 +112,505 @@ export default function VPE_Chats() {
     });
   };
 
+  const [showForumModal, setShowForumModal] = useState(false);
+  const [forumPosts, setForumPosts] = useState([]);
+  const [activeForumThreadId, setActiveForumThreadId] = useState(null);
+  const [forumPostTitle, setForumPostTitle] = useState("");
+  const [forumPostBody, setForumPostBody] = useState("");
+  const [forumReplyBody, setForumReplyBody] = useState("");
+  const [forumPostFiles, setForumPostFiles] = useState([]);
+  const [forumReplyFiles, setForumReplyFiles] = useState([]);
+  const [isPostingThread, setIsPostingThread] = useState(false);
+  const [isPostingReply, setIsPostingReply] = useState(false);
+
+  const storedUser = localStorage.getItem("user");
+  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
+
+  const normalizeForumPost = useCallback((post) => {
+    if (!post) return null;
+    const rawParent = post.parentPostId ?? post.parentMessageId;
+    const parentId = rawParent !== null && rawParent !== undefined && String(rawParent).trim() !== "" ? String(rawParent) : null;
+    let threadId = post.threadId !== null && post.threadId !== undefined ? String(post.threadId) : null;
+    if (!threadId && !parentId && post._id) {
+      threadId = String(post._id);
+    }
+    return {
+      ...post,
+      parentMessageId: parentId,
+      parentPostId: parentId,
+      threadId,
+      title: post.title && post.title.trim() ? post.title.trim() : null,
+      isRootPost: post.isRootPost !== undefined ? post.isRootPost : !parentId,
+    };
+  }, []);
+
+  const appendForumPostToState = useCallback((post) => {
+    if (!post) return;
+    const normalized = normalizeForumPost(post);
+    if (!normalized) return;
+    setForumPosts((prev) => {
+      const index = prev.findIndex((item) => item._id === normalized._id);
+      if (index !== -1) {
+        const next = [...prev];
+        next[index] = normalized;
+        return next;
+      }
+      return [...prev, normalized];
+    });
+  }, [normalizeForumPost]);
+
+  const fetchForumPosts = useCallback(async () => {
+    if (!forumGroupId) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`${API_BASE}/forum-posts/${forumGroupId}?userId=${currentUserId}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const normalized = (res.data || []).map(normalizeForumPost).filter(Boolean);
+      setForumPosts(normalized);
+      setActiveForumThreadId((prev) => {
+        if (prev && normalized.some(thread => thread.threadId === prev)) {
+          return prev;
+        }
+        return normalized.length > 0 ? normalized[0].threadId : null;
+      });
+    } catch (err) {
+      console.error("Error loading forum posts:", err);
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Forum Error',
+        message: 'Unable to load forum topics right now. Please try again later.'
+      });
+    }
+  }, [forumGroupId, currentUserId, normalizeForumPost]);
+
+  useEffect(() => {
+    if (showForumModal && forumGroupId) {
+      fetchForumPosts();
+    }
+  }, [showForumModal, forumGroupId, fetchForumPosts]);
+
+  const forumThreads = useMemo(() => {
+    if (!forumPosts.length) return [];
+    const threadMap = new Map();
+    const messageMap = new Map();
+
+    forumPosts.forEach((msg) => {
+      if (msg?._id) {
+        messageMap.set(String(msg._id), msg);
+      }
+    });
+
+    const rootPosts = [];
+    const replies = [];
+
+    forumPosts.forEach((msg) => {
+      if (msg.isRootPost || !msg.parentMessageId) {
+        rootPosts.push(msg);
+      } else {
+        replies.push(msg);
+      }
+    });
+
+    rootPosts.forEach((msg) => {
+      const key = msg.threadId || (msg._id ? String(msg._id) : null);
+      if (!key) return;
+      if (!threadMap.has(key)) {
+        threadMap.set(key, { threadId: key, root: msg, replies: [], rootTimestamp: new Date(msg.createdAt || msg.updatedAt || 0).getTime() });
+      } else {
+        const existing = threadMap.get(key);
+        const timestamp = new Date(msg.createdAt || msg.updatedAt || 0).getTime();
+        if (!existing.root || timestamp < existing.rootTimestamp) {
+          if (existing.root) {
+            existing.replies.push(existing.root);
+          }
+          existing.root = msg;
+          existing.rootTimestamp = timestamp;
+        } else {
+          existing.replies.push(msg);
+        }
+      }
+    });
+
+    replies.forEach((msg) => {
+      const parentId = msg.parentMessageId ? String(msg.parentMessageId) : null;
+      let threadKey = msg.threadId ? String(msg.threadId) : null;
+
+      if (!threadKey && parentId) {
+        const parent = messageMap.get(parentId);
+        if (parent) {
+          threadKey = parent.threadId || parentId;
+        } else {
+          threadKey = parentId;
+        }
+      }
+
+      if (!threadKey) return;
+
+      if (!threadMap.has(threadKey)) {
+        threadMap.set(threadKey, { threadId: threadKey, root: null, replies: [] });
+      }
+      threadMap.get(threadKey).replies.push(msg);
+    });
+
+    return Array.from(threadMap.values())
+      .filter(thread => thread.root)
+      .map(thread => ({
+        threadId: thread.threadId,
+        root: thread.root,
+        replies: thread.replies.sort(
+          (a, b) => new Date(a.createdAt || a.updatedAt || 0) - new Date(b.createdAt || b.updatedAt || 0)
+        ),
+      }))
+      .sort(
+        (a, b) =>
+          new Date(b.root?.createdAt || b.root?.updatedAt || 0) -
+          new Date(a.root?.createdAt || a.root?.updatedAt || 0)
+      );
+  }, [forumPosts]);
+
+  const activeForumThread = useMemo(() => {
+    if (!forumThreads.length) return null;
+    if (!activeForumThreadId) return forumThreads[0];
+    return forumThreads.find(thread => thread.threadId === activeForumThreadId) || forumThreads[0];
+  }, [forumThreads, activeForumThreadId]);
+
+  useEffect(() => {
+    if (!showForumModal) return;
+    if (!forumThreads.length) {
+      setActiveForumThreadId(null);
+      return;
+    }
+    if (!activeForumThreadId || !forumThreads.some(thread => thread.threadId === activeForumThreadId)) {
+      setActiveForumThreadId(forumThreads[0].threadId);
+    }
+  }, [forumThreads, activeForumThreadId, showForumModal]);
+
+  const handleOpenForum = () => {
+    if (!forumGroup) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Forum Unavailable',
+        message: 'The SJDEF Forum group is not available right now.'
+      });
+      return;
+    }
+    clearHighlight(forumGroup._id);
+    setShowForumModal(true);
+  };
+
+  const handleCloseForumModal = () => {
+    setShowForumModal(false);
+    setForumPostTitle("");
+    setForumPostBody("");
+    setForumPostFiles([]);
+    setForumReplyBody("");
+    setForumReplyFiles([]);
+  };
+
+  const handleForumFileSelect = (e, target = "post") => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const dedupe = (prev, additions) => {
+      const existing = new Set(prev.map(f => `${f.name}|${f.size}|${f.lastModified}`));
+      const filtered = additions.filter(f => !existing.has(`${f.name}|${f.size}|${f.lastModified}`));
+      return [...prev, ...filtered];
+    };
+    if (target === "reply") {
+      setForumReplyFiles((prev) => dedupe(prev, files));
+    } else {
+      setForumPostFiles((prev) => dedupe(prev, files));
+    }
+    e.target.value = null;
+  };
+
+  const removeForumFile = (target, index) => {
+    if (target === "reply") {
+      setForumReplyFiles((prev) => prev.filter((_, i) => i !== index));
+    } else {
+      setForumPostFiles((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const sendForumMessage = useCallback(async ({ text, files = [], parentMessageId = null, title = "" }) => {
+    if (!forumGroupId) return null;
+    const token = localStorage.getItem("token");
+    let latestMessage = null;
+
+    try {
+      if (text && text.trim()) {
+        const textForm = new FormData();
+        textForm.append("groupId", forumGroupId);
+        textForm.append("senderId", currentUserId);
+        textForm.append("message", text.trim());
+        if (parentMessageId) {
+          textForm.append("parentPostId", parentMessageId);
+        } else if (title?.trim()) {
+          textForm.append("title", title.trim());
+        }
+        const textRes = await axios.post(`${API_BASE}/forum-posts`, textForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        latestMessage = normalizeForumPost(textRes.data);
+        appendForumPostToState(latestMessage);
+      }
+
+      const attachmentParentId = parentMessageId || latestMessage?._id || null;
+      for (const file of files) {
+        const fileForm = new FormData();
+        fileForm.append("groupId", forumGroupId);
+        fileForm.append("senderId", currentUserId);
+        fileForm.append("message", "");
+        if (attachmentParentId) {
+          fileForm.append("parentPostId", attachmentParentId);
+        }
+        fileForm.append("file", file);
+        const fileRes = await axios.post(`${API_BASE}/forum-posts`, fileForm, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        appendForumPostToState(fileRes.data);
+      }
+
+      return latestMessage;
+    } catch (error) {
+      console.error("Error sending forum message:", error);
+      const message = error.response?.data?.error || "Unable to send your forum message.";
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Forum Error',
+        message
+      });
+      throw error;
+    }
+  }, [API_BASE, appendForumPostToState, forumGroupId, currentUserId, normalizeForumPost]);
+
+  const handleCreateForumPost = async () => {
+    if (!forumGroup) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Forum Unavailable',
+        message: 'The SJDEF Forum group is not available right now.'
+      });
+      return;
+    }
+    if (!forumPostTitle.trim()) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Missing Title',
+        message: 'Please provide a title for your topic.'
+      });
+      return;
+    }
+    if (!forumPostBody.trim() && forumPostFiles.length === 0) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Nothing to Post',
+        message: 'Add a message or attach at least one file before posting.'
+      });
+      return;
+    }
+    setIsPostingThread(true);
+    try {
+      const created = await sendForumMessage({
+        text: forumPostBody.trim(),
+        files: forumPostFiles,
+        parentMessageId: null,
+        title: forumPostTitle.trim()
+      });
+      if (created?.threadId) {
+        setActiveForumThreadId(created.threadId);
+      }
+      setForumPostTitle("");
+      setForumPostBody("");
+      setForumPostFiles([]);
+    } catch {
+      // handled upstream
+    } finally {
+      setIsPostingThread(false);
+    }
+  };
+
+  const handleReplyToThread = async () => {
+    if (!forumGroup) return;
+    const rootMessage = activeForumThread?.root;
+    if (!rootMessage?._id) {
+      setValidationModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Thread Missing',
+        message: 'Select a topic before posting a reply.'
+      });
+      return;
+    }
+    if (!forumReplyBody.trim() && forumReplyFiles.length === 0) {
+      setValidationModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Empty Reply',
+        message: 'Add a reply message or attach a file.'
+      });
+      return;
+    }
+    setIsPostingReply(true);
+    try {
+      await sendForumMessage({
+        text: forumReplyBody.trim(),
+        files: forumReplyFiles,
+        parentMessageId: String(rootMessage._id)
+      });
+      setForumReplyBody("");
+      setForumReplyFiles([]);
+    } catch {
+      // handled upstream
+    } finally {
+      setIsPostingReply(false);
+    }
+  };
+
+  const formatForumTimestamp = (timestamp, includeYear = false) => {
+    if (!timestamp) return "";
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const options = includeYear
+      ? { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }
+      : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+    return parsed.toLocaleString("en-US", options);
+  };
+
+  const getSenderDisplayName = (message) => {
+    if (!message) return "Unknown User";
+    const cached = message.senderId ? users.find(u => u._id === message.senderId) : null;
+    if (cached?.lastname && cached?.firstname) {
+      return `${cached.lastname}, ${cached.firstname}`;
+    }
+    if (message.senderName) return message.senderName;
+    const last = message.senderLastname || "";
+    const first = message.senderFirstname || "";
+    return `${last}${last && first ? ", " : ""}${first}`.trim() || "Unknown User";
+  };
+
+  const getSenderAvatar = (message) => {
+    const cached = message?.senderId ? users.find(u => u._id === message.senderId) : null;
+    return cached?.profilePic || message?.senderProfilePic || null;
+  };
+
+  const getAttachmentMeta = (msg) => {
+    if (!msg?.fileUrl) return null;
+    const isFullUrl = /^https?:\/\//i.test(msg.fileUrl);
+    const resolvedUrl = isFullUrl ? msg.fileUrl : `${API_BASE}/${msg.fileUrl}`;
+    let resolvedName = msg.fileName;
+    if (!resolvedName) {
+      const urlParts = msg.fileUrl.split("/");
+      const lastPart = urlParts[urlParts.length - 1]?.split("?")[0];
+      resolvedName = msg.fileUrl.includes("/raw/upload/") ? `attachment_${lastPart}` : (lastPart || "attachment");
+    }
+    const lowerName = resolvedName.toLowerCase();
+    const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(lowerName);
+    const isExcel = /\.(xlsx|xls|csv)$/i.test(lowerName);
+    const isPDF = lowerName.endsWith(".pdf");
+    const isWord = lowerName.endsWith(".doc") || lowerName.endsWith(".docx");
+    const isPowerPoint = lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx");
+    return {
+      fileUrl: resolvedUrl,
+      fileName: resolvedName,
+      isImage,
+      isExcel,
+      isPDF,
+      isWord,
+      isPowerPoint,
+      isCloudinaryRaw: resolvedUrl.includes("res.cloudinary.com") && resolvedUrl.includes("/raw/upload/")
+    };
+  };
+
+  const renderAttachmentPreview = (msg, isOwnBubble = false) => {
+    if (!msg?.fileUrl) return null;
+    const meta = getAttachmentMeta(msg);
+    if (!meta) return null;
+
+    const handleDownload = async (e) => {
+      e.preventDefault();
+      try {
+        let downloadUrl = meta.fileUrl;
+        if (meta.fileUrl.includes("res.cloudinary.com")) {
+          const separator = meta.fileUrl.includes("?") ? "&" : "?";
+          downloadUrl = `${meta.fileUrl}${separator}fl_attachment:${encodeURIComponent(meta.fileName)}`;
+        }
+        const response = await fetch(downloadUrl, { method: "GET", mode: "cors" });
+        if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
+        let blob;
+        if (meta.isCloudinaryRaw) {
+          const arrayBuffer = await response.arrayBuffer();
+          let mimeType = response.headers.get("content-type") || "application/octet-stream";
+          blob = new Blob([arrayBuffer], { type: mimeType });
+        } else {
+          blob = await response.blob();
+        }
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = meta.fileName;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        }, 120);
+      } catch (error) {
+        console.error("Error downloading file:", error);
+        window.open(meta.fileUrl, "_blank");
+      }
+    };
+
+    if (meta.isImage) {
+      return (
+        <a href={meta.fileUrl} target="_blank" rel="noopener noreferrer" onClick={handleDownload}>
+          <img
+            src={meta.fileUrl}
+            alt="Attachment preview"
+            className="rounded-md max-h-56 max-w-full object-contain border border-white/30 mt-2"
+            loading="lazy"
+          />
+        </a>
+      );
+    }
+
+    return (
+      <a
+        href={meta.fileUrl}
+        onClick={handleDownload}
+        className={`${isOwnBubble ? "text-blue-100" : "text-blue-700"} underline decoration-current/40 hover:decoration-current flex items-center gap-2 cursor-pointer mt-2`}
+      >
+        {meta.isExcel && "📊"}
+        {meta.isPDF && "📄"}
+        {meta.isWord && "📝"}
+        {meta.isPowerPoint && "📊"}
+        {!meta.isExcel && !meta.isPDF && !meta.isWord && !meta.isPowerPoint && "📎"}
+        <span>
+          {meta.isExcel ? "Excel File" :
+            meta.isPDF ? "PDF Document" :
+            meta.isWord ? "Word Document" :
+            meta.isPowerPoint ? "PowerPoint" :
+            "Attachment"}
+        </span>
+        <span className="text-xs opacity-75">
+          ({meta.fileName.startsWith('attachment_') ? 'File' : meta.fileName})
+        </span>
+      </a>
+    );
+  };
+
   // (helpers defined once above)
 
   const [validationModal, setValidationModal] = useState({
@@ -125,9 +630,6 @@ export default function VPE_Chats() {
 
   const API_URL = import.meta.env.VITE_API_URL || "https://juanlms-webapp-server.onrender.com";
   const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_URL).replace(/\/$/, "");
-
-  const storedUser = localStorage.getItem("user");
-  const currentUserId = storedUser ? JSON.parse(storedUser)?._id : null;
 
   const navigate = useNavigate();
 
@@ -1300,39 +1802,63 @@ export default function VPE_Chats() {
         <div className="flex flex-1 overflow-hidden h-full">
           {/* LEFT PANEL */}
           <div className="w-full md:w-1/3 p-4 overflow-hidden flex flex-col h-full">
-            {/* Header and Plus Icon */}
-            <div className="flex items-center justify-between mb-4">
-              <input
-                type="text"
-                placeholder="Search users or groups..."
-                className="flex-1 p-2 border rounded-lg text-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <div className="relative ml-2">
+            {/* Header Tabs and Actions */}
+            <div className="mb-4">
+              <div className="flex border-b border-gray-300 mb-3">
                 <button
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
-                  onClick={() => setShowGroupMenu((prev) => !prev)}
-                  title="Group Actions"
+                  className="px-4 py-2 text-sm font-semibold border-b-2 border-blue-900 text-blue-900"
+                  type="button"
+                  aria-current="true"
                 >
-                  <span className="text-2xl leading-none">+</span>
+                  Chats
                 </button>
-                {showGroupMenu && (
-                  <div className="absolute right-0 mt-2 w-36 bg-white border rounded-lg shadow-lg z-10">
-                    <button
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      onClick={() => { setShowCreateGroupModal(true); setShowGroupMenu(false); }}
-                    >
-                      Create Group
-                    </button>
-                    <button
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      onClick={() => { setShowJoinGroupModal(true); setShowGroupMenu(false); }}
-                    >
-                      Join Group
-                    </button>
-                  </div>
-                )}
+                <button
+                  className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                    forumGroup
+                      ? "border-transparent text-gray-500 hover:text-blue-900 hover:border-blue-300"
+                      : "border-transparent text-gray-400 cursor-not-allowed"
+                  }`}
+                  type="button"
+                  onClick={forumGroup ? handleOpenForum : undefined}
+                  disabled={!forumGroup}
+                  title={forumGroup ? "Open SJDEF Forum" : "Forum group not available yet"}
+                >
+                  SJDEF Forum
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder="Search users or groups..."
+                  className="flex-1 p-2 border rounded-lg text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="relative ml-2">
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-900 text-white hover:bg-blue-800 focus:outline-none"
+                    onClick={() => setShowGroupMenu((prev) => !prev)}
+                    title="Group Actions"
+                  >
+                    <span className="text-2xl leading-none">+</span>
+                  </button>
+                  {showGroupMenu && (
+                    <div className="absolute right-0 mt-2 w-36 bg-white border rounded-lg shadow-lg z-10">
+                      <button
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => { setShowCreateGroupModal(true); setShowGroupMenu(false); }}
+                      >
+                        Create Group
+                      </button>
+                      <button
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                        onClick={() => { setShowJoinGroupModal(true); setShowGroupMenu(false); }}
+                      >
+                        Join Group
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             {/* Unified Chat List */}
@@ -2008,6 +2534,35 @@ export default function VPE_Chats() {
             </div>
           </div>
         )}
+
+        <ForumModal
+          isOpen={showForumModal && !!forumGroup}
+          onClose={handleCloseForumModal}
+          selectedChat={forumGroup}
+          apiBase={API_BASE}
+          forumThreads={forumThreads}
+          activeForumThreadId={activeForumThreadId}
+          setActiveForumThreadId={setActiveForumThreadId}
+          forumPostTitle={forumPostTitle}
+          setForumPostTitle={setForumPostTitle}
+          forumPostBody={forumPostBody}
+          setForumPostBody={setForumPostBody}
+          forumReplyBody={forumReplyBody}
+          setForumReplyBody={setForumReplyBody}
+          forumPostFiles={forumPostFiles}
+          forumReplyFiles={forumReplyFiles}
+          removeForumFile={removeForumFile}
+          handleForumFileSelect={handleForumFileSelect}
+          handleCreateForumPost={handleCreateForumPost}
+          handleReplyToThread={handleReplyToThread}
+          isPostingThread={isPostingThread}
+          isPostingReply={isPostingReply}
+          currentUserId={currentUserId}
+          getSenderDisplayName={getSenderDisplayName}
+          getSenderAvatar={getSenderAvatar}
+          renderAttachmentPreview={renderAttachmentPreview}
+          formatForumTimestamp={formatForumTimestamp}
+        />
 
         {/* Validation Modal */}
         <ValidationModal
